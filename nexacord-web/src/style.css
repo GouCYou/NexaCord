@@ -1,0 +1,93 @@
+:root {
+  --discord-brand: #5865f2;
+  --discord-brand-hover: #4752c4;
+  --discord-green: #3ba55d;
+  --discord-red: #ed4245;
+  --discord-bg: #313338;
+  --discord-surface: #2b2d31;
+  --discord-surface-alt: #1e1f22;
+  --discord-surface-soft: #232428;
+  --discord-elevated: #111214;
+  --discord-text: #f2f3f5;
+  --discord-text-muted: #b5bac1;
+  --discord-text-faint: #949ba4;
+  --discord-border: rgba(255, 255, 255, 0.06);
+  --discord-channel-hover: rgba(79, 84, 92, 0.48);
+  --discord-channel-active: rgba(88, 101, 242, 0.28);
+  --discord-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+  font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', sans-serif;
+  color: var(--discord-text);
+  background: var(--discord-bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top, rgba(88, 101, 242, 0.16), transparent 26%),
+    var(--discord-bg);
+  color: var(--discord-text);
+}
+
+a {
+  color: var(--discord-brand);
+  text-decoration: none;
+}
+
+a:hover {
+  color: #7b86ff;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  border: 0;
+  cursor: pointer;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid rgba(88, 101, 242, 0.65);
+  outline-offset: 1px;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(17, 18, 20, 0.72);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(17, 18, 20, 0.9);
+}
