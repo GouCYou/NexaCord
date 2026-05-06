@@ -1,5 +1,24 @@
-# Vue 3 + TypeScript + Vite
+# Nexacord 前端
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+这是 Nexacord 的网页端，使用现代前端框架、类型脚本、快速构建工具、状态管理和路由体系构建。
 
-Learn more about the recommended Project Setup and IDE Support in the [Vue Docs TypeScript Guide](https://vuejs.org/guide/typescript/overview.html#project-setup).
+## 主要能力
+
+- 用户登录、注册和本地会话恢复
+- 服务器列表、服务器创建和服务器切换
+- 文字频道、语音频道列表和频道创建
+- 频道消息加载、发送和实时刷新
+- 文件附件选择、上传和发送
+
+## 本地运行
+
+```bash
+npm install
+npm run dev
+```
+
+## 生产构建
+
+```bash
+npm run build
+```

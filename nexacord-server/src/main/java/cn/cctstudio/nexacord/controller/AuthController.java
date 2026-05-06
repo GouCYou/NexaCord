@@ -1,7 +1,9 @@
 package cn.cctstudio.nexacord.controller;
 
 import cn.cctstudio.nexacord.dto.AuthResponse;
+import cn.cctstudio.nexacord.dto.EmailCodeRequest;
 import cn.cctstudio.nexacord.dto.LoginRequest;
+import cn.cctstudio.nexacord.dto.PasswordResetRequest;
 import cn.cctstudio.nexacord.dto.RegisterRequest;
 import cn.cctstudio.nexacord.service.AuthService;
 import jakarta.validation.Valid;
@@ -20,9 +22,9 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest registerRequest) {
-        log.info("Register request received: username={}, email={}", registerRequest.getUsername(), registerRequest.getEmail());
+        log.info("收到注册请求：username={}, email={}", registerRequest.getUsername(), registerRequest.getEmail());
         AuthResponse response = authService.register(registerRequest);
-        log.info("Register successful for user: {}", registerRequest.getUsername());
+        log.info("用户注册成功：{}", registerRequest.getUsername());
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
@@ -30,6 +32,18 @@ public class AuthController {
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest loginRequest) {
         AuthResponse response = authService.login(loginRequest);
         return new ResponseEntity<>(response, HttpStatus.OK);
+    }
+
+    @PostMapping("/email-code")
+    public ResponseEntity<Void> sendEmailCode(@Valid @RequestBody EmailCodeRequest request) {
+        authService.sendEmailCode(request.getEmail(), request.getPurpose());
+        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<Void> resetPassword(@Valid @RequestBody PasswordResetRequest request) {
+        authService.resetPassword(request);
+        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
     @PostMapping("/refresh")

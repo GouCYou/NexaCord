@@ -19,6 +19,7 @@ public class WebSocketMessage {
     public static class UserInfo {
         private Long id;
         private String username;
+        private String displayName;
         private String avatarUrl;
         private String status;
     }

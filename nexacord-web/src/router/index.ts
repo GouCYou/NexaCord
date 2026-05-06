@@ -9,7 +9,13 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: true },
     children: [
       {
-        path: '/server/:serverId/channel/:channelId',
+        path: '',
+        name: 'Friends',
+        component: () => import('../components/FriendsHome.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
+        path: '/servers/:serverId/channels/:channelId',
         name: 'Channel',
         component: () => import('../components/MessageList.vue'),
         meta: { requiresAuth: true },
@@ -27,6 +33,24 @@ const routes: RouteRecordRaw[] = [
     name: 'Register',
     component: () => import('../views/RegisterView.vue'),
     meta: { requiresAuth: false },
+  },
+  {
+    path: '/invite/:code',
+    name: 'Invite',
+    component: () => import('../views/InviteView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/登录',
+    redirect: '/login',
+  },
+  {
+    path: '/注册',
+    redirect: '/register',
+  },
+  {
+    path: '/服务器/:serverId/频道/:channelId',
+    redirect: (to) => `/servers/${to.params.serverId}/channels/${to.params.channelId}`,
   },
   {
     path: '/:pathMatch(.*)*',

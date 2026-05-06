@@ -3,17 +3,18 @@
     <div class="auth-card">
       <section class="brand-panel">
         <span class="brand-kicker">创建</span>
-        <h1>建立属于你的 Discord 风格社区</h1>
+        <h1>建立属于你的实时交流社区</h1>
         <p>注册后即可创建服务器和频道，并在熟悉的三栏布局里使用实时消息功能。</p>
       </section>
 
       <section class="form-panel">
         <header class="form-header">
           <h2>创建账号</h2>
-          <p>填写基础信息后即可进入 NexaCord。</p>
+          <p>填写基础信息后即可进入 Nexacord。</p>
         </header>
 
-        <div v-if="error" class="error-message">{{ error }}</div>
+        <div v-if="error || localError" class="error-message">{{ localError || error }}</div>
+        <div v-if="localNotice" class="notice-message">{{ localNotice }}</div>
 
         <form class="form-body" @submit.prevent="handleRegister">
           <label class="field">
@@ -27,12 +28,34 @@
           </label>
 
           <label class="field">
+            <span>邮箱验证码</span>
+            <div class="code-row">
+              <input
+                v-model="registerForm.verificationCode"
+                type="text"
+                inputmode="numeric"
+                placeholder="输入 6 位验证码"
+                required
+              />
+              <button
+                class="secondary-button"
+                type="button"
+                :disabled="isSendingCode || !registerForm.email.trim()"
+                @click="sendRegisterCode"
+              >
+                {{ isSendingCode ? '发送中' : '发送验证码' }}
+              </button>
+            </div>
+          </label>
+
+          <label class="field">
             <span>密码</span>
             <input
               v-model="registerForm.password"
               type="password"
-              placeholder="至少 6 位字符"
-              minlength="6"
+              placeholder="8-20 位，包含大小写、数字和符号"
+              minlength="8"
+              maxlength="20"
               required
             />
           </label>
@@ -43,21 +66,25 @@
               v-model="confirmPassword"
               type="password"
               placeholder="再次输入密码"
-              minlength="6"
+              minlength="8"
+              maxlength="20"
               required
             />
           </label>
 
-          <p v-if="registerForm.password !== confirmPassword" class="error-inline">
+          <p v-if="passwordError" class="error-inline">{{ passwordError }}</p>
+          <p v-else class="hint-inline">{{ passwordPolicyText }}</p>
+
+          <p v-if="passwordsMismatch" class="error-inline">
             两次输入的密码不一致。
           </p>
 
           <button
             class="primary-button"
             type="submit"
-            :disabled="isLoading || registerForm.password !== confirmPassword"
+            :disabled="isLoading || !canSubmit"
           >
-            {{ isLoading ? '注册中...' : '注册并进入' }}
+            {{ isLoading ? '注册中……' : '注册并进入' }}
           </button>
         </form>
 
@@ -71,11 +98,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useRouter } from 'vue-router';
+import authService from '../services/authService';
 import { useUserStore } from '../stores/userStore';
 import type { RegisterRequest } from '../types';
+import { getPasswordStrengthError, passwordPolicyText } from '../utils/passwordPolicy';
 
 const router = useRouter();
 const userStore = useUserStore();
@@ -84,13 +113,54 @@ const registerForm = ref<RegisterRequest>({
   username: '',
   email: '',
   password: '',
+  verificationCode: '',
 });
 
 const confirmPassword = ref('');
+const isSendingCode = ref(false);
+const localError = ref('');
+const localNotice = ref('');
 const { isLoading, error } = storeToRefs(userStore);
 
+const passwordError = computed(() => getPasswordStrengthError(registerForm.value.password));
+const passwordsMismatch = computed(
+  () => Boolean(registerForm.value.password || confirmPassword.value) && registerForm.value.password !== confirmPassword.value
+);
+const canSubmit = computed(
+  () =>
+    Boolean(registerForm.value.username.trim()) &&
+    Boolean(registerForm.value.email.trim()) &&
+    Boolean(registerForm.value.verificationCode.trim()) &&
+    Boolean(registerForm.value.password) &&
+    !passwordError.value &&
+    !passwordsMismatch.value
+);
+
+const sendRegisterCode = async () => {
+  localError.value = '';
+  localNotice.value = '';
+  isSendingCode.value = true;
+
+  try {
+    await authService.sendEmailCode({
+      email: registerForm.value.email.trim(),
+      purpose: 'REGISTER',
+    });
+    localNotice.value = '验证码已发送，请检查邮箱。';
+  } catch (err: any) {
+    localError.value =
+      err.response?.data?.error ||
+      err.response?.data?.message ||
+      '发送验证码失败，请稍后再试。';
+  } finally {
+    isSendingCode.value = false;
+  }
+};
+
 const handleRegister = async () => {
-  if (registerForm.value.password !== confirmPassword.value) {
+  localError.value = '';
+  localNotice.value = '';
+  if (!canSubmit.value) {
     return;
   }
 
@@ -113,10 +183,10 @@ const handleRegister = async () => {
   width: min(980px, 100%);
   display: grid;
   grid-template-columns: 1.05fr 0.95fr;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--discord-border);
   border-radius: 24px;
   overflow: hidden;
-  background: rgba(17, 18, 20, 0.72);
+  background: color-mix(in srgb, var(--discord-elevated) 82%, transparent);
   box-shadow: var(--discord-shadow);
   backdrop-filter: blur(18px);
 }
@@ -130,14 +200,15 @@ const handleRegister = async () => {
   display: grid;
   align-content: center;
   gap: 16px;
+  color: white;
   background:
     radial-gradient(circle at top left, rgba(59, 165, 93, 0.28), transparent 34%),
     radial-gradient(circle at bottom right, rgba(88, 101, 242, 0.3), transparent 40%),
-    #202226;
+    var(--discord-surface-soft);
 }
 
 .brand-kicker {
-  color: #8effbf;
+  color: rgba(255, 255, 255, 0.9);
   font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.14em;
@@ -153,7 +224,7 @@ const handleRegister = async () => {
 .brand-panel p {
   margin: 0;
   max-width: 420px;
-  color: var(--discord-text-muted);
+  color: rgba(255, 255, 255, 0.86);
   font-size: 16px;
 }
 
@@ -161,7 +232,7 @@ const handleRegister = async () => {
   display: grid;
   align-content: center;
   gap: 20px;
-  background: rgba(43, 45, 49, 0.96);
+  background: color-mix(in srgb, var(--discord-surface) 96%, transparent);
 }
 
 .form-header h2 {
@@ -195,27 +266,62 @@ const handleRegister = async () => {
 .field input {
   width: 100%;
   padding: 14px 16px;
-  border: 1px solid rgba(0, 0, 0, 0.32);
+  border: 1px solid var(--discord-border);
   border-radius: 12px;
-  background: #1e1f22;
+  background: var(--discord-input);
   color: var(--discord-text);
 }
 
+.code-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.secondary-button {
+  min-width: 116px;
+  border-radius: 12px;
+  background: var(--discord-muted-surface);
+  color: var(--discord-text);
+  font-weight: 800;
+}
+
+.secondary-button:hover:not(:disabled) {
+  background: var(--discord-hover-strong);
+}
+
 .error-message,
-.error-inline {
+.error-inline,
+.hint-inline {
   color: #ff8b8d;
   font-size: 14px;
 }
 
-.error-message {
+.error-message,
+.notice-message {
   padding: 12px 14px;
-  border: 1px solid rgba(237, 66, 69, 0.3);
   border-radius: 12px;
+  font-size: 14px;
+}
+
+.error-message {
+  border: 1px solid rgba(237, 66, 69, 0.3);
   background: rgba(237, 66, 69, 0.1);
 }
 
-.error-inline {
+.notice-message {
+  border: 1px solid rgba(59, 165, 93, 0.28);
+  background: rgba(59, 165, 93, 0.1);
+  color: var(--discord-green);
+}
+
+.error-inline,
+.hint-inline {
   margin: 0;
+}
+
+.hint-inline {
+  color: var(--discord-text-faint);
 }
 
 .primary-button {

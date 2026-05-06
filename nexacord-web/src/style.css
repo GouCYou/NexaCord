@@ -8,13 +8,26 @@
   --discord-surface-alt: #1e1f22;
   --discord-surface-soft: #232428;
   --discord-elevated: #111214;
+  --discord-rail: #1e1f22;
+  --discord-input: #1e1f22;
+  --discord-overlay: rgba(0, 0, 0, 0.72);
+  --discord-hover: rgba(255, 255, 255, 0.08);
+  --discord-hover-strong: rgba(255, 255, 255, 0.14);
+  --discord-pressed: rgba(255, 255, 255, 0.1);
+  --discord-subtle: rgba(255, 255, 255, 0.04);
+  --discord-muted-surface: rgba(255, 255, 255, 0.06);
   --discord-text: #f2f3f5;
   --discord-text-muted: #b5bac1;
   --discord-text-faint: #949ba4;
   --discord-border: rgba(255, 255, 255, 0.06);
+  --discord-strong-border: rgba(255, 255, 255, 0.12);
   --discord-channel-hover: rgba(79, 84, 92, 0.48);
   --discord-channel-active: rgba(88, 101, 242, 0.28);
   --discord-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+  --discord-body-glow: rgba(88, 101, 242, 0.16);
+  --discord-link-hover: #7b86ff;
+  --discord-scrollbar: rgba(17, 18, 20, 0.72);
+  --discord-scrollbar-hover: rgba(17, 18, 20, 0.9);
   font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', sans-serif;
   color: var(--discord-text);
   background: var(--discord-bg);
@@ -22,6 +35,38 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+:root[data-theme='light'] {
+  --discord-brand: #5865f2;
+  --discord-brand-hover: #4752c4;
+  --discord-green: #248046;
+  --discord-red: #d83c3e;
+  --discord-bg: #ffffff;
+  --discord-surface: #f2f3f5;
+  --discord-surface-alt: #e3e5e8;
+  --discord-surface-soft: #ebedef;
+  --discord-elevated: #ffffff;
+  --discord-rail: #e3e5e8;
+  --discord-input: #ffffff;
+  --discord-overlay: rgba(6, 6, 7, 0.46);
+  --discord-hover: rgba(6, 6, 7, 0.06);
+  --discord-hover-strong: rgba(6, 6, 7, 0.12);
+  --discord-pressed: rgba(6, 6, 7, 0.1);
+  --discord-subtle: rgba(6, 6, 7, 0.035);
+  --discord-muted-surface: rgba(6, 6, 7, 0.06);
+  --discord-text: #232428;
+  --discord-text-muted: #4e5058;
+  --discord-text-faint: #6d6f78;
+  --discord-border: rgba(6, 6, 7, 0.1);
+  --discord-strong-border: rgba(6, 6, 7, 0.16);
+  --discord-channel-hover: rgba(116, 127, 141, 0.18);
+  --discord-channel-active: rgba(88, 101, 242, 0.16);
+  --discord-shadow: 0 18px 48px rgba(0, 0, 0, 0.16);
+  --discord-body-glow: rgba(88, 101, 242, 0.1);
+  --discord-link-hover: #4752c4;
+  --discord-scrollbar: rgba(79, 84, 92, 0.32);
+  --discord-scrollbar-hover: rgba(79, 84, 92, 0.48);
 }
 
 * {
@@ -40,9 +85,18 @@ body {
   min-width: 320px;
   min-height: 100vh;
   background:
-    radial-gradient(circle at top, rgba(88, 101, 242, 0.16), transparent 26%),
+    radial-gradient(circle at top, var(--discord-body-glow), transparent 26%),
     var(--discord-bg);
   color: var(--discord-text);
+}
+
+:root[data-theme='light'] .brand-panel {
+  color: var(--discord-text);
+}
+
+:root[data-theme='light'] .brand-panel p,
+:root[data-theme='light'] .brand-kicker {
+  color: var(--discord-text-muted);
 }
 
 a {
@@ -51,7 +105,7 @@ a {
 }
 
 a:hover {
-  color: #7b86ff;
+  color: var(--discord-link-hover);
 }
 
 button,
@@ -84,10 +138,10 @@ select:focus-visible {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(17, 18, 20, 0.72);
+  background: var(--discord-scrollbar);
   border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(17, 18, 20, 0.9);
+  background: var(--discord-scrollbar-hover);
 }

@@ -36,6 +36,8 @@ public class User implements UserDetails {
     @Column(nullable = false, unique = true)
     private String username;
 
+    private String displayName;
+
     @Column(nullable = false, unique = true)
     private String email;
 
@@ -45,6 +47,7 @@ public class User implements UserDetails {
 
     private String avatarUrl;
     private String bannerUrl;
+    private String bannerColor;
     private String bio;
     private String status;
 

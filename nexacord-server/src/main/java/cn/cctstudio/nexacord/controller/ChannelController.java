@@ -1,5 +1,6 @@
 package cn.cctstudio.nexacord.controller;
 
+import cn.cctstudio.nexacord.exception.AccessDeniedException;
 import cn.cctstudio.nexacord.model.Channel;
 import cn.cctstudio.nexacord.model.Server;
 import cn.cctstudio.nexacord.model.User;
@@ -23,21 +24,22 @@ public class ChannelController {
 
     @PostMapping("/server/{serverId}")
     public ResponseEntity<Channel> createChannel(@PathVariable Long serverId, @Valid @RequestBody Channel channel, @AuthenticationPrincipal User currentUser) {
+        requireManager(serverId, currentUser);
         Server server = serverService.getServerById(serverId);
-        // 检查用户是否是服务器所有者或管理员
-        // TODO: 添加权限检查
         Channel createdChannel = channelService.createChannel(channel, server);
         return new ResponseEntity<>(createdChannel, HttpStatus.CREATED);
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Channel> getChannelById(@PathVariable Long id) {
+    public ResponseEntity<Channel> getChannelById(@PathVariable Long id, @AuthenticationPrincipal User currentUser) {
         Channel channel = channelService.getChannelById(id);
+        requireMember(channel.getServer().getId(), currentUser);
         return new ResponseEntity<>(channel, HttpStatus.OK);
     }
 
     @GetMapping("/server/{serverId}")
-    public ResponseEntity<List<Channel>> getChannelsByServer(@PathVariable Long serverId) {
+    public ResponseEntity<List<Channel>> getChannelsByServer(@PathVariable Long serverId, @AuthenticationPrincipal User currentUser) {
+        requireMember(serverId, currentUser);
         List<Channel> channels = channelService.getChannelsByServerId(serverId);
         return new ResponseEntity<>(channels, HttpStatus.OK);
     }
@@ -45,8 +47,7 @@ public class ChannelController {
     @PutMapping("/{id}")
     public ResponseEntity<Channel> updateChannel(@PathVariable Long id, @Valid @RequestBody Channel channel, @AuthenticationPrincipal User currentUser) {
         Channel existingChannel = channelService.getChannelById(id);
-        // 检查用户是否是服务器所有者或管理员
-        // TODO: 添加权限检查
+        requireManager(existingChannel.getServer().getId(), currentUser);
         channel.setId(id);
         Channel updatedChannel = channelService.updateChannel(channel);
         return new ResponseEntity<>(updatedChannel, HttpStatus.OK);
@@ -55,9 +56,20 @@ public class ChannelController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteChannel(@PathVariable Long id, @AuthenticationPrincipal User currentUser) {
         Channel channel = channelService.getChannelById(id);
-        // 检查用户是否是服务器所有者或管理员
-        // TODO: 添加权限检查
+        requireManager(channel.getServer().getId(), currentUser);
         channelService.deleteChannel(id);
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+    }
+
+    private void requireMember(Long serverId, User currentUser) {
+        if (currentUser == null || !serverService.isServerMember(serverId, currentUser.getId())) {
+            throw new AccessDeniedException("你不是这个服务器的成员。");
+        }
+    }
+
+    private void requireManager(Long serverId, User currentUser) {
+        if (currentUser == null || !serverService.isServerManager(serverId, currentUser.getId())) {
+            throw new AccessDeniedException("你没有管理频道的权限。");
+        }
     }
 }

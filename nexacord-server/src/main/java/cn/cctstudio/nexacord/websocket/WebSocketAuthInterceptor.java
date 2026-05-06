@@ -2,7 +2,6 @@ package cn.cctstudio.nexacord.websocket;
 
 import cn.cctstudio.nexacord.model.User;
 import cn.cctstudio.nexacord.security.JwtTokenProvider;
-import cn.cctstudio.nexacord.service.AuthService;
 import cn.cctstudio.nexacord.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.Message;

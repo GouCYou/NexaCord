@@ -1,5 +1,5 @@
 import api from './api';
-import type { LoginRequest, RegisterRequest, User } from '../types';
+import type { EmailCodeRequest, LoginRequest, PasswordResetRequest, RegisterRequest, User } from '../types';
 
 type AuthResponse = {
   accessToken: string;
@@ -29,9 +29,21 @@ class AuthService {
     return response;
   }
 
+  async sendEmailCode(request: EmailCodeRequest): Promise<void> {
+    return api.post<void>('/auth/email-code', request);
+  }
+
+  async resetPassword(request: PasswordResetRequest): Promise<void> {
+    return api.post<void>('/auth/reset-password', request);
+  }
+
   logout(): void {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+  }
+
+  setCurrentUser(user: User): void {
+    localStorage.setItem('user', JSON.stringify(user));
   }
 
   getCurrentUser(): User | null {

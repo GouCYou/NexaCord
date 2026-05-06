@@ -24,7 +24,7 @@ public class ChannelServiceImpl implements ChannelService {
     @Override
     public Channel getChannelById(Long id) {
         return channelRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Channel not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("没有找到该频道：" + id));
     }
 
     @Override

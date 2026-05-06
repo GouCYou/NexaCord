@@ -1,80 +1,113 @@
 ####################
-# Server
+# 服务端口
 ####################
 server:
   port: 8080
 
 ####################
-# Spring
+# 应用与框架
 ####################
 spring:
+  config:
+    import: optional:file:./application-local.yml
+
   application:
     name: nexacord-server
 
   ####################
-  # Database / JPA
+  # 数据库和持久化
   ####################
   datasource:
-    url: jdbc:mysql://localhost:3306/nexacord?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
-    username: cctserver
-    password: CCTGouC666
+    url: ${DB_URL:jdbc:mysql://localhost:3306/nexacord?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false}
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:admin}
     driver-class-name: com.mysql.cj.jdbc.Driver
+
+  servlet:
+    multipart:
+      max-file-size: ${MAX_FILE_SIZE:25MB}
+      max-request-size: ${MAX_REQUEST_SIZE:50MB}
+
+  ####################
+  # 邮件验证码
+  ####################
+  mail:
+    host: ${MAIL_HOST:smtp.163.com}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:cctnetwork@163.com}
+    password: ${MAIL_PASSWORD:}
+    protocol: smtp
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
 
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
+    open-in-view: false
+    show-sql: ${JPA_SHOW_SQL:false}
     properties:
       hibernate:
         format_sql: true
         # dialect: org.hibernate.dialect.MySQLDialect
 
   ####################
-  # Redis
+  # 缓存
   ####################
   data:
     redis:
-      host: localhost
-      port: 6379
-      database: 0
-      # password: ""
+      repositories:
+        enabled: false
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      database: ${REDIS_DATABASE:0}
+      password: ${REDIS_PASSWORD:}
 
   ####################
-  # Web / MVC
+  # 网页路由
   ####################
   mvc:
     pathmatch:
       matching-strategy: ant_path_matcher
 
   ####################
-  # Timezone / JSON
+  # 时区和数据格式
   ####################
   jackson:
     time-zone: Asia/Shanghai
 
 ####################
-# JWT
+# 令牌
 ####################
 jwt:
-  secret: "kfndORz7eM0MhZJ837YhYNyxqZO6O4zLgOjY7GROQwSLBdaACmb+wz2VSD2SrXo2uTYivZf0Ji0O3BLd4XQseg=="
-  expiration: 3600000
+  secret: ${JWT_SECRET:kfndORz7eM0MhZJ837YhYNyxqZO6O4zLgOjY7GROQwSLBdaACmb+wz2VSD2SrXo2uTYivZf0Ji0O3BLd4XQseg==}
+  expiration: ${JWT_EXPIRATION:3600000}
   refresh-token:
-    expiration: 604800000
+    expiration: ${JWT_REFRESH_EXPIRATION:604800000}
 
 ####################
-# RustFS / S3 (MinIO compatible)
+# 七牛云对象存储
 ####################
-rustfs:
-  endpoint: http://192.168.1.6:9000
-  access-key: VT09fWzZu12d8hgDUYbX
-  secret-key: rJVYvfjbAw6CKBeL5UysDoWtXlx81g0dzFQ3u74R
-  bucket: nexacord
-  region: us-east-1
-  path-style-access-enabled: true
+qiniu:
+  access-key: ${QINIU_ACCESS_KEY:}
+  secret-key: ${QINIU_SECRET_KEY:}
+  bucket: ${QINIU_BUCKET:nexacord}
+  domain: ${QINIU_DOMAIN:oss2.cctstudio.cn}
+  use-https: ${QINIU_USE_HTTPS:true}
+  private-bucket: ${QINIU_PRIVATE_BUCKET:false}
+  region: ${QINIU_REGION:auto}
+
+app:
+  cors:
+    allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174}
 
 logging:
   level:
-    org.springframework.web: DEBUG
-    org.springframework.web.servlet.mvc.method.annotation: DEBUG
-    org.springframework.security: DEBUG
-    org.hibernate.SQL: DEBUG
+    org.springframework.web: ${LOG_LEVEL_SPRING_WEB:INFO}
+    org.springframework.web.servlet.mvc.method.annotation: ${LOG_LEVEL_SPRING_MVC:INFO}
+    org.springframework.security: ${LOG_LEVEL_SECURITY:INFO}
+    org.hibernate.SQL: ${LOG_LEVEL_HIBERNATE_SQL:WARN}

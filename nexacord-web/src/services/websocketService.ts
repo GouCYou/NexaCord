@@ -1,4 +1,5 @@
 import { Client, type IMessage } from '@stomp/stompjs';
+import type { StompSubscription } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 
 export type WebSocketEvent =
@@ -97,6 +98,22 @@ class WebSocketService {
     }
   }
 
+  public subscribe(destination: string, handler: (payload: unknown) => void): (() => void) | null {
+    if (!this.client?.connected) {
+      return null;
+    }
+
+    const subscription: StompSubscription = this.client.subscribe(destination, (message) => {
+      try {
+        handler(JSON.parse(message.body));
+      } catch (error) {
+        console.error(`解析实时订阅内容失败：${destination}`, error);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }
+
   private subscribeToTopics(): void {
     if (!this.client?.connected) {
       return;
@@ -139,7 +156,7 @@ class WebSocketService {
     try {
       this.dispatchEvent(event, JSON.parse(message.body));
     } catch (error) {
-      console.error(`Failed to parse WebSocket payload for ${event}:`, error);
+      console.error(`解析实时消息内容失败：${event}`, error);
     }
   }
 
@@ -153,7 +170,7 @@ class WebSocketService {
       try {
         handler(event, payload);
       } catch (error) {
-        console.error(`Failed to handle WebSocket event ${event}:`, error);
+        console.error(`处理实时消息事件失败：${event}`, error);
       }
     });
   }

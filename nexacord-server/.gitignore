@@ -33,3 +33,6 @@ build/
 .vscode/
 run.out
 run.err
+application-local.yml
+src/main/resources/application-local.yml
+src/main/resources/application-*.local.yml

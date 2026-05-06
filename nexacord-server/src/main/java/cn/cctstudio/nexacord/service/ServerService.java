@@ -13,4 +13,6 @@ public interface ServerService {
     Server updateServer(Server server);
     void deleteServer(Long id);
     boolean isServerOwner(Long serverId, Long userId);
+    boolean isServerManager(Long serverId, Long userId);
+    boolean isServerMember(Long serverId, Long userId);
 }

@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
-import type { Server } from '../types';
+import type { Member, MemberRole, Server, ServerInvite } from '../types';
 import serverService from '../services/serverService';
 
 const normalizeServer = (server: Partial<Server>): Server => ({
@@ -50,7 +50,7 @@ export const useServerStore = defineStore('server', () => {
           ? preferredServerId
           : currentServerId.value && servers.value.some((server) => server.id === currentServerId.value)
             ? currentServerId.value
-            : servers.value[0]?.id ?? null;
+            : null;
 
       currentServerId.value = nextServerId;
       return servers.value;
@@ -138,6 +138,71 @@ export const useServerStore = defineStore('server', () => {
     }
   };
 
+  const fetchServerMembers = async (serverId: number): Promise<Member[]> => {
+    try {
+      return await serverService.getServerMembers(serverId);
+    } catch (err: any) {
+      error.value =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        '无法加载服务器成员。';
+      return [];
+    }
+  };
+
+  const addServerMember = async (serverId: number, userId: number): Promise<Member | null> => {
+    try {
+      return await serverService.addServerMember(serverId, userId);
+    } catch (err: any) {
+      error.value =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        '邀请成员加入服务器失败。';
+      return null;
+    }
+  };
+
+  const updateServerMemberRole = async (
+    serverId: number,
+    memberId: number,
+    role: Extract<MemberRole, 'ADMIN' | 'MEMBER'>
+  ): Promise<Member | null> => {
+    try {
+      return await serverService.updateServerMemberRole(serverId, memberId, role);
+    } catch (err: any) {
+      error.value =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        '更新成员身份组失败。';
+      return null;
+    }
+  };
+
+  const removeServerMember = async (serverId: number, memberId: number) => {
+    try {
+      await serverService.removeServerMember(serverId, memberId);
+      return true;
+    } catch (err: any) {
+      error.value =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        '移除服务器成员失败。';
+      return false;
+    }
+  };
+
+  const createServerInvite = async (serverId: number): Promise<ServerInvite | null> => {
+    try {
+      return await serverService.createInvite(serverId);
+    } catch (err: any) {
+      error.value =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        '创建邀请链接失败。';
+      return null;
+    }
+  };
+
   const deleteServer = async (serverId: number) => {
     isLoading.value = true;
     error.value = null;
@@ -177,6 +242,11 @@ export const useServerStore = defineStore('server', () => {
     createServer,
     updateServer,
     deleteServer,
+    fetchServerMembers,
+    addServerMember,
+    updateServerMemberRole,
+    removeServerMember,
+    createServerInvite,
     setCurrentServer,
   };
 });

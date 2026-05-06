@@ -1,28 +1,47 @@
 <template>
   <nav class="server-list" aria-label="服务器列表">
+    <div class="server-entry" :class="{ active: !currentServerId }">
+      <button
+        class="server-button home-server"
+        :class="{ active: !currentServerId }"
+        type="button"
+        aria-label="好友"
+        @click="openHome"
+      >
+        <img class="server-image" src="/logo.png" alt="Nexacord" />
+      </button>
+      <span class="server-tooltip">好友</span>
+    </div>
+
+    <div class="server-divider"></div>
+
     <button
       class="server-button add-server"
       type="button"
       title="创建服务器"
       @click="showCreateServerModal = true"
     >
-      <span class="server-glyph">+</span>
+      <Plus :size="24" aria-hidden="true" />
     </button>
 
-    <div class="server-divider"></div>
-
-    <button
+    <div
       v-for="server in validServers"
       :key="server.id"
-      class="server-button"
+      class="server-entry"
       :class="{ active: currentServerId === server.id }"
-      :title="server.name"
-      type="button"
-      @click="selectServer(server.id)"
     >
-      <img v-if="server.iconUrl" class="server-image" :src="server.iconUrl" :alt="server.name" />
-      <span v-else class="server-glyph">{{ server.name.charAt(0).toUpperCase() }}</span>
-    </button>
+      <button
+        class="server-button"
+        :class="{ active: currentServerId === server.id }"
+        :aria-label="server.name"
+        type="button"
+        @click="selectServer(server.id)"
+      >
+        <img v-if="server.iconUrl" class="server-image" :src="server.iconUrl" :alt="server.name" />
+        <ServerIcon v-else :size="22" aria-hidden="true" />
+      </button>
+      <span class="server-tooltip">{{ server.name }}</span>
+    </div>
 
     <p v-if="validServers.length === 0" class="server-hint">创建你的第一个服务器</p>
 
@@ -33,13 +52,15 @@
             <h2>创建你的服务器</h2>
             <p>先建立一个空间，再添加频道、成员和实时聊天。</p>
           </div>
-          <button class="icon-button" type="button" @click="closeModal">x</button>
+          <button class="icon-button" type="button" aria-label="关闭弹窗" @click="closeModal">
+            <X :size="20" aria-hidden="true" />
+          </button>
         </header>
 
         <div class="modal-body">
           <label class="field">
             <span>服务器名称</span>
-            <input v-model="newServer.name" type="text" placeholder="例如：NexaCord 社区" />
+            <input v-model="newServer.name" type="text" placeholder="例如：Nexacord 朋友服务器" />
           </label>
 
           <label class="field">
@@ -62,7 +83,7 @@
             :disabled="isLoading || !newServer.name.trim()"
             @click="createServer"
           >
-            {{ isLoading ? '创建中...' : '创建服务器' }}
+            {{ isLoading ? '创建中……' : '创建服务器' }}
           </button>
         </footer>
       </div>
@@ -73,9 +94,14 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { storeToRefs } from 'pinia';
+import { useRouter } from 'vue-router';
+import { Plus, Server as ServerIcon, X } from 'lucide-vue-next';
+import { useChannelStore } from '../stores/channelStore';
 import { useServerStore } from '../stores/serverStore';
 
+const router = useRouter();
 const serverStore = useServerStore();
+const channelStore = useChannelStore();
 const { servers, currentServerId, isLoading, error } = storeToRefs(serverStore);
 
 const showCreateServerModal = ref(false);
@@ -92,6 +118,12 @@ const validServers = computed(() =>
 
 const openCreateServerModal = () => {
   showCreateServerModal.value = true;
+};
+
+const openHome = () => {
+  serverStore.setCurrentServer(null);
+  channelStore.clearChannels();
+  router.push('/');
 };
 
 const selectServer = (serverId: number) => {
@@ -147,35 +179,56 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  overflow-y: auto;
+  overflow: visible;
+}
+
+.server-entry {
+  position: relative;
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+}
+
+.server-entry::before {
+  content: '';
+  position: absolute;
+  left: -16px;
+  top: 50%;
+  width: 0;
+  height: 8px;
+  border-radius: 0 999px 999px 0;
+  background: var(--discord-text);
+  transform: translateY(-50%);
+  transition:
+    width 140ms ease,
+    height 140ms ease;
+}
+
+.server-entry:hover::before {
+  width: 4px;
+  height: 20px;
+}
+
+.server-entry.active::before {
+  width: 4px;
+  height: 40px;
 }
 
 .server-button {
   position: relative;
   width: 48px;
   height: 48px;
+  padding: 0;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: #232428;
+  background: var(--discord-surface-soft);
   color: var(--discord-text);
   transition:
     border-radius 160ms ease,
     background-color 160ms ease,
     transform 160ms ease;
-}
-
-.server-button::before {
-  content: '';
-  position: absolute;
-  left: -14px;
-  width: 0;
-  height: 20px;
-  border-radius: 999px;
-  background: white;
-  transition:
-    width 140ms ease,
-    height 140ms ease;
+  overflow: hidden;
 }
 
 .server-button:hover {
@@ -184,19 +237,9 @@ onBeforeUnmount(() => {
   transform: translateY(-1px);
 }
 
-.server-button:hover::before {
-  width: 4px;
-  height: 20px;
-}
-
 .server-button.active {
   border-radius: 16px;
   background: var(--discord-brand);
-}
-
-.server-button.active::before {
-  width: 4px;
-  height: 40px;
 }
 
 .add-server {
@@ -212,7 +255,7 @@ onBeforeUnmount(() => {
   width: 32px;
   height: 2px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--discord-hover);
 }
 
 .server-image {
@@ -222,9 +265,44 @@ onBeforeUnmount(() => {
   border-radius: inherit;
 }
 
-.server-glyph {
-  font-size: 18px;
-  font-weight: 800;
+.server-tooltip {
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  z-index: 50;
+  max-width: 220px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: var(--discord-elevated);
+  color: var(--discord-text);
+  box-shadow: var(--discord-shadow);
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%) translateX(-6px) scale(0.98);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+  white-space: nowrap;
+}
+
+.server-tooltip::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  background: inherit;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.server-entry:hover .server-tooltip,
+.server-entry:focus-within .server-tooltip {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0) scale(1);
 }
 
 .server-hint {
@@ -243,7 +321,7 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(0, 0, 0, 0.72);
+  background: var(--discord-overlay);
   backdrop-filter: blur(8px);
 }
 
@@ -251,7 +329,7 @@ onBeforeUnmount(() => {
   width: min(460px, 100%);
   border: 1px solid var(--discord-border);
   border-radius: 18px;
-  background: #2b2d31;
+  background: var(--discord-surface);
   box-shadow: var(--discord-shadow);
 }
 
@@ -298,9 +376,9 @@ onBeforeUnmount(() => {
 .field textarea {
   width: 100%;
   padding: 12px 14px;
-  border: 1px solid rgba(0, 0, 0, 0.32);
+  border: 1px solid var(--discord-border);
   border-radius: 10px;
-  background: #1e1f22;
+  background: var(--discord-input);
   color: var(--discord-text);
   resize: vertical;
 }
@@ -332,7 +410,7 @@ onBeforeUnmount(() => {
 }
 
 .icon-button:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--discord-muted-surface);
   color: var(--discord-text);
 }
 
@@ -343,12 +421,12 @@ onBeforeUnmount(() => {
 }
 
 .secondary-button {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--discord-hover);
   color: var(--discord-text);
 }
 
 .secondary-button:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--discord-hover-strong);
 }
 
 .primary-button {

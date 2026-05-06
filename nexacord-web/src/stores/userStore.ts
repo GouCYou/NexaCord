@@ -1,7 +1,8 @@
 import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
-import type { LoginRequest, RegisterRequest, User } from '../types';
+import type { LoginRequest, RegisterRequest, User, UserProfileUpdateRequest } from '../types';
 import authService from '../services/authService';
+import userService from '../services/userService';
 import websocketService from '../services/websocketService';
 
 export const useUserStore = defineStore('user', () => {
@@ -49,6 +50,37 @@ export const useUserStore = defineStore('user', () => {
     }
   };
 
+  const refreshCurrentUser = async () => {
+    try {
+      const user = await userService.getCurrentUser();
+      currentUser.value = user;
+      authService.setCurrentUser(user);
+      return user;
+    } catch {
+      return currentUser.value;
+    }
+  };
+
+  const updateProfile = async (profile: UserProfileUpdateRequest) => {
+    isLoading.value = true;
+    error.value = null;
+
+    try {
+      const updatedUser = await userService.updateCurrentUser(profile);
+      currentUser.value = updatedUser;
+      authService.setCurrentUser(updatedUser);
+      return true;
+    } catch (err: any) {
+      error.value =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        '更新个人资料失败。';
+      return false;
+    } finally {
+      isLoading.value = false;
+    }
+  };
+
   const register = async (credentials: RegisterRequest) => {
     isLoading.value = true;
     error.value = null;
@@ -89,6 +121,8 @@ export const useUserStore = defineStore('user', () => {
     initializeUser,
     login,
     register,
+    refreshCurrentUser,
+    updateProfile,
     logout,
   };
 });

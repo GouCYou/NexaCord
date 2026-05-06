@@ -2,7 +2,10 @@
   <section class="message-layout">
     <header class="message-header">
       <div class="message-header-meta">
-        <span class="message-header-prefix">#</span>
+        <span class="message-header-prefix">
+          <Volume2 v-if="currentChannel?.type === 'VOICE'" :size="24" aria-hidden="true" />
+          <Hash v-else :size="24" aria-hidden="true" />
+        </span>
         <div class="message-header-copy">
           <h2>{{ currentChannel?.name || '频道' }}</h2>
           <p>{{ headerSubtitle }}</p>
@@ -11,14 +14,27 @@
 
       <div class="message-header-status">
         <span>{{ currentChannel?.type === 'VOICE' ? '语音频道' : '文字频道' }}</span>
-        <span>{{ currentChannelMessages.length }} 条消息</span>
+        <button class="header-tool" type="button" title="显示或隐藏成员列表" @click="toggleMemberSidebar">
+          <Users :size="18" aria-hidden="true" />
+        </button>
       </div>
     </header>
 
-    <div ref="messagesContainer" class="messages-scroll">
+    <VoiceChannelPanel
+      v-if="currentChannel?.type === 'VOICE' && currentChannelId"
+      :channel-id="currentChannelId"
+      :channel-name="currentChannel.name"
+    />
+
+    <div
+      v-else
+      ref="messagesContainer"
+      class="messages-scroll"
+      :class="{ 'is-empty-channel': currentChannel && currentChannelMessages.length === 0 && !isLoading }"
+    >
       <div v-if="isLoading" class="status-block">
         <div class="spinner"></div>
-        <p>正在加载消息...</p>
+        <p>正在加载消息……</p>
       </div>
 
       <div v-else-if="!currentChannel" class="status-block">
@@ -26,10 +42,14 @@
         <p>从左侧频道列表中选中一个频道后，这里会加载对应的聊天内容。</p>
       </div>
 
-      <div v-else-if="currentChannelMessages.length === 0" class="status-block welcome-block">
-        <strong># {{ currentChannel.name }}</strong>
-        <p>{{ headerSubtitle }}</p>
-        <span class="welcome-chip">发送第一条消息</span>
+      <div v-else-if="currentChannelMessages.length === 0" class="channel-welcome">
+        <div class="welcome-icon">
+          <Hash :size="52" aria-hidden="true" />
+        </div>
+        <h1>欢迎来到 #{{ currentChannel.name }}!</h1>
+        <p>
+          这是 #{{ currentChannel.name }} 频道的起点。{{ headerSubtitle }}
+        </p>
       </div>
 
       <div v-else class="messages-list">
@@ -39,14 +59,15 @@
           class="message-row"
           :class="{ own: message.author.id === currentUser?.id }"
         >
-          <div class="avatar">
-            <img v-if="message.author.avatarUrl" :src="message.author.avatarUrl" :alt="message.author.username" />
-            <span v-else>{{ message.author.username.charAt(0).toUpperCase() }}</span>
-          </div>
+          <button class="avatar" type="button" @click.stop="openUserPopover(message.author, $event)">
+            <img :src="message.author.avatarUrl || defaultAvatarUrl" :alt="displayUserName(message.author)" />
+          </button>
 
           <div class="message-body">
             <header class="message-meta">
-              <strong>{{ message.author.username }}</strong>
+              <button class="author-button" type="button" @click.stop="openUserPopover(message.author, $event)">
+                {{ displayUserName(message.author) }}
+              </button>
               <span>{{ formatTime(message.createdAt) }}</span>
               <em v-if="message.edited">已编辑</em>
             </header>
@@ -58,11 +79,20 @@
                 v-for="attachment in message.attachments || []"
                 :key="attachment.id"
                 class="attachment"
+                :class="{ image: isImageAttachment(attachment) }"
                 :href="attachment.url"
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <span class="attachment-icon">文件</span>
+                <img
+                  v-if="isImageAttachment(attachment)"
+                  class="attachment-image"
+                  :src="attachment.url"
+                  :alt="attachment.fileName"
+                />
+                <span v-else class="attachment-icon">
+                  <FileIcon :size="18" aria-hidden="true" />
+                </span>
                 <span class="attachment-copy">
                   <strong>{{ attachment.fileName }}</strong>
                   <small>{{ formatFileSize(attachment.fileSize) }}</small>
@@ -74,22 +104,52 @@
       </div>
     </div>
 
-    <footer class="composer">
+    <footer v-if="currentChannel?.type !== 'VOICE'" class="composer">
       <div v-if="pendingFiles.length > 0" class="pending-files">
         <div
           v-for="(file, index) in pendingFiles"
           :key="`${file.name}-${file.size}-${index}`"
           class="pending-file"
         >
+          <img v-if="isImageFile(file)" class="pending-image" :src="filePreviewUrl(file)" :alt="file.name" />
           <span class="pending-file-copy">
             <strong>{{ file.name }}</strong>
             <small>{{ formatFileSize(file.size) }}</small>
           </span>
-          <button type="button" class="pending-file-remove" @click="removePendingFile(index)">x</button>
+          <button
+            type="button"
+            class="pending-file-remove"
+            aria-label="移除附件"
+            @click="removePendingFile(index)"
+          >
+            <X :size="16" aria-hidden="true" />
+          </button>
         </div>
       </div>
 
-      <div class="composer-input">
+      <div v-if="showEmojiPicker" class="emoji-picker" @click.stop>
+        <label class="emoji-search">
+          <input v-model="emojiSearch" type="text" placeholder="搜索表情" />
+        </label>
+        <div class="emoji-scroll">
+          <section v-for="group in filteredEmojiGroups" :key="group.name" class="emoji-group">
+            <strong>{{ group.name }}</strong>
+            <div class="emoji-grid">
+              <button
+                v-for="emoji in group.emojis"
+                :key="emoji"
+                type="button"
+                :title="emoji"
+                @click="insertEmoji(emoji)"
+              >
+                {{ emoji }}
+              </button>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <div class="composer-input" @click.stop>
         <input ref="fileInput" class="visually-hidden" type="file" multiple @change="handleFileSelection" />
 
         <button
@@ -99,7 +159,7 @@
           :disabled="isUploading || !currentChannelId"
           @click="openFilePicker"
         >
-          +
+          <Paperclip :size="19" aria-hidden="true" />
         </button>
 
         <textarea
@@ -114,31 +174,45 @@
         ></textarea>
 
         <button
+          class="emoji-button"
+          type="button"
+          title="选择表情"
+          :disabled="!currentChannelId"
+          @click="toggleEmojiPicker"
+        >
+          <Smile :size="20" aria-hidden="true" />
+        </button>
+
+        <button
           class="send-button"
           type="button"
           :disabled="isSending || isUploading || !canSend"
           @click="sendMessage"
         >
-          {{ sendButtonLabel }}
+          <Send :size="17" aria-hidden="true" />
+          <span>{{ sendButtonLabel }}</span>
         </button>
       </div>
 
       <p v-if="composerError" class="composer-error">{{ composerError }}</p>
-      <p class="composer-hint">按 Enter 发送，Shift + Enter 换行。</p>
     </footer>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import dayjs from 'dayjs';
 import 'dayjs/locale/zh-cn';
+import { FileIcon, Hash, Paperclip, Send, Smile, Users, Volume2, X } from 'lucide-vue-next';
+import VoiceChannelPanel from './VoiceChannelPanel.vue';
 import fileService from '../services/fileService';
 import { useChannelStore } from '../stores/channelStore';
 import { useMessageStore, type MessageAttachmentInput } from '../stores/messageStore';
 import { useUserStore } from '../stores/userStore';
+import { useServerStore } from '../stores/serverStore';
+import type { Attachment, User } from '../types';
 
 dayjs.locale('zh-cn');
 
@@ -146,6 +220,8 @@ const route = useRoute();
 const channelStore = useChannelStore();
 const messageStore = useMessageStore();
 const userStore = useUserStore();
+const serverStore = useServerStore();
+const defaultAvatarUrl = '/logo.png';
 
 const messagesContainer = ref<HTMLElement | null>(null);
 const composerTextarea = ref<HTMLTextAreaElement | null>(null);
@@ -154,10 +230,36 @@ const newMessageContent = ref('');
 const pendingFiles = ref<File[]>([]);
 const isUploading = ref(false);
 const localError = ref<string | null>(null);
+const showEmojiPicker = ref(false);
+const emojiSearch = ref('');
+const previewUrls = new Map<File, string>();
+const emojiGroups = [
+  {
+    name: '常用',
+    emojis: ['😀', '😄', '😂', '🤣', '😊', '😍', '😘', '😎', '😭', '😡', '👍', '👎', '👏', '🙏', '💪', '🔥', '✨', '🎉', '❤️', '💙', '💜', '💯', '✅', '❌'],
+  },
+  {
+    name: '表情',
+    emojis: ['🙂', '🙃', '😉', '😌', '🥰', '😋', '🤔', '🤨', '😐', '😑', '😶', '😴', '🤤', '😵', '🤯', '🥳', '😇', '🤠', '🤓', '🫡', '🫠', '🥹', '😤', '😱'],
+  },
+  {
+    name: '手势',
+    emojis: ['👋', '🤚', '✋', '👌', '🤌', '🤏', '✌️', '🤞', '🤟', '🤘', '👈', '👉', '👆', '👇', '☝️', '✍️', '🤝', '🫶', '🙌', '👐'],
+  },
+  {
+    name: '物品',
+    emojis: ['🎮', '🎧', '🎤', '📷', '💻', '⌨️', '🖱️', '📱', '📌', '📎', '🧭', '⏰', '🧪', '🛠️', '💡', '🔒', '🔑', '🎁', '🏆', '🚀'],
+  },
+  {
+    name: '自然',
+    emojis: ['☀️', '🌙', '⭐', '🌈', '⚡', '❄️', '🌊', '🌸', '🌵', '🍀', '🍎', '🍔', '🍕', '🍜', '🍰', '☕', '🍵', '🥤', '🍺', '🍬'],
+  },
+];
 
 const { currentChannel, currentChannelId } = storeToRefs(channelStore);
 const { currentChannelMessages, isLoading, isSending, error } = storeToRefs(messageStore);
 const { currentUser } = storeToRefs(userStore);
+const { currentServer } = storeToRefs(serverStore);
 
 const headerSubtitle = computed(() => {
   if (!currentChannel.value) {
@@ -179,17 +281,49 @@ const canSend = computed(
 
 const sendButtonLabel = computed(() => {
   if (isUploading.value) {
-    return '上传中...';
+    return '上传中……';
   }
 
   if (isSending.value) {
-    return '发送中...';
+    return '发送中……';
   }
 
   return '发送';
 });
 
 const composerError = computed(() => localError.value || error.value);
+
+const displayUserName = (user: { username: string; displayName?: string | null }) =>
+  user.displayName?.trim() || user.username;
+
+const openUserPopover = (user: User, event: MouseEvent) => {
+  window.dispatchEvent(new CustomEvent('nexacord:open-user-popover', {
+    detail: {
+      user,
+      serverName: currentServer.value?.name,
+      x: event.clientX,
+      y: event.clientY,
+    },
+  }));
+};
+
+const toggleMemberSidebar = () => {
+  window.dispatchEvent(new CustomEvent('nexacord:toggle-member-sidebar'));
+};
+
+const filteredEmojiGroups = computed(() => {
+  const query = emojiSearch.value.trim();
+  if (!query) {
+    return emojiGroups;
+  }
+
+  return emojiGroups
+    .map((group) => ({
+      ...group,
+      emojis: group.emojis.filter((emoji) => emoji.includes(query)),
+    }))
+    .filter((group) => group.emojis.length > 0);
+});
 
 const formatTime = (time: string) => {
   const parsedTime = dayjs(time);
@@ -209,6 +343,37 @@ const formatFileSize = (bytes: number): string => {
   if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
   if (bytes < 1073741824) return `${(bytes / 1048576).toFixed(1)} MB`;
   return `${(bytes / 1073741824).toFixed(1)} GB`;
+};
+
+const isImageAttachment = (attachment: Attachment) =>
+  attachment.fileType?.startsWith('image/') || /\.(png|jpe?g|gif|webp|avif|svg)$/i.test(attachment.url);
+
+const isImageFile = (file: File) => file.type.startsWith('image/');
+
+const filePreviewUrl = (file: File) => {
+  const existingUrl = previewUrls.get(file);
+  if (existingUrl) {
+    return existingUrl;
+  }
+
+  const url = URL.createObjectURL(file);
+  previewUrls.set(file, url);
+  return url;
+};
+
+const revokeFilePreview = (file: File) => {
+  const url = previewUrls.get(file);
+  if (!url) {
+    return;
+  }
+
+  URL.revokeObjectURL(url);
+  previewUrls.delete(file);
+};
+
+const revokeAllFilePreviews = () => {
+  previewUrls.forEach((url) => URL.revokeObjectURL(url));
+  previewUrls.clear();
 };
 
 const scrollToBottom = () => {
@@ -240,6 +405,32 @@ const openFilePicker = () => {
   fileInput.value?.click();
 };
 
+const toggleEmojiPicker = () => {
+  showEmojiPicker.value = !showEmojiPicker.value;
+};
+
+const closeEmojiPicker = () => {
+  showEmojiPicker.value = false;
+};
+
+const insertEmoji = (emoji: string) => {
+  const textarea = composerTextarea.value;
+  const start = textarea?.selectionStart ?? newMessageContent.value.length;
+  const end = textarea?.selectionEnd ?? newMessageContent.value.length;
+
+  newMessageContent.value =
+    `${newMessageContent.value.substring(0, start)}${emoji}${newMessageContent.value.substring(end)}`;
+  showEmojiPicker.value = false;
+
+  nextTick(() => {
+    if (textarea) {
+      textarea.focus();
+      textarea.selectionStart = textarea.selectionEnd = start + emoji.length;
+    }
+    autoResizeComposer();
+  });
+};
+
 const handleFileSelection = (event: Event) => {
   const input = event.target as HTMLInputElement;
   const selectedFiles = Array.from(input.files || []);
@@ -262,6 +453,11 @@ const handleFileSelection = (event: Event) => {
 };
 
 const removePendingFile = (index: number) => {
+  const removedFile = pendingFiles.value[index];
+  if (removedFile) {
+    revokeFilePreview(removedFile);
+  }
+
   pendingFiles.value = pendingFiles.value.filter((_, currentIndex) => currentIndex !== index);
 };
 
@@ -313,6 +509,7 @@ const uploadPendingFiles = async (): Promise<MessageAttachmentInput[]> => {
 
 const resetComposer = () => {
   newMessageContent.value = '';
+  revokeAllFilePreviews();
   pendingFiles.value = [];
   resetFileInput();
   autoResizeComposer();
@@ -342,6 +539,7 @@ const sendMessage = async () => {
     }
 
     resetComposer();
+    showEmojiPicker.value = false;
     scrollToBottom();
   } catch (uploadError: any) {
     const attachmentsToCleanup = uploadError?.uploadedAttachments || uploadedAttachments;
@@ -396,6 +594,12 @@ watch(newMessageContent, () => {
 onMounted(() => {
   autoResizeComposer();
   scrollToBottom();
+  window.addEventListener('click', closeEmojiPicker);
+});
+
+onBeforeUnmount(() => {
+  revokeAllFilePreviews();
+  window.removeEventListener('click', closeEmojiPicker);
 });
 </script>
 
@@ -405,7 +609,7 @@ onMounted(() => {
   grid-template-rows: auto 1fr auto;
   height: 100%;
   min-height: 0;
-  background: #313338;
+  background: var(--discord-bg);
 }
 
 .message-header {
@@ -415,7 +619,7 @@ onMounted(() => {
   gap: 16px;
   padding: 14px 18px;
   border-bottom: 1px solid var(--discord-border);
-  background: rgba(49, 51, 56, 0.95);
+  background: color-mix(in srgb, var(--discord-bg) 95%, transparent);
   backdrop-filter: blur(14px);
 }
 
@@ -462,13 +666,34 @@ onMounted(() => {
 .message-header-status span {
   padding: 7px 10px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--discord-muted-surface);
+}
+
+.header-tool {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: var(--discord-text-faint);
+}
+
+.header-tool:hover {
+  background: var(--discord-hover);
+  color: var(--discord-text);
 }
 
 .messages-scroll {
   min-height: 0;
   overflow-y: auto;
   padding: 8px 0 20px;
+}
+
+.messages-scroll.is-empty-channel {
+  display: grid;
+  align-items: end;
+  padding: 0 26px 44px;
 }
 
 .messages-list {
@@ -484,7 +709,7 @@ onMounted(() => {
 }
 
 .message-row:hover {
-  background: rgba(4, 4, 5, 0.07);
+  background: var(--discord-subtle);
 }
 
 .message-row.own {
@@ -504,6 +729,10 @@ onMounted(() => {
   overflow: hidden;
 }
 
+.avatar:hover {
+  filter: brightness(1.06);
+}
+
 .avatar img {
   width: 100%;
   height: 100%;
@@ -521,8 +750,17 @@ onMounted(() => {
   gap: 8px;
 }
 
-.message-meta strong {
+.author-button {
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--discord-text);
   font-size: 15px;
+  font-weight: 900;
+}
+
+.author-button:hover {
+  text-decoration: underline;
 }
 
 .message-meta span,
@@ -534,7 +772,7 @@ onMounted(() => {
 
 .message-content {
   margin-top: 4px;
-  color: #dbdee1;
+  color: var(--discord-text);
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
@@ -551,15 +789,22 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
+  max-width: min(420px, 100%);
   min-width: 220px;
   padding: 12px 14px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--discord-muted-surface);
   color: var(--discord-text);
 }
 
+.attachment.image {
+  display: grid;
+  align-items: start;
+  padding: 8px;
+}
+
 .attachment:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--discord-pressed);
 }
 
 .attachment-icon {
@@ -573,6 +818,14 @@ onMounted(() => {
   color: #b9c0ff;
   font-size: 12px;
   font-weight: 800;
+}
+
+.attachment-image {
+  width: 100%;
+  max-height: 320px;
+  border-radius: 10px;
+  object-fit: cover;
+  background: var(--discord-input);
 }
 
 .attachment-copy {
@@ -604,25 +857,43 @@ onMounted(() => {
   color: var(--discord-text);
 }
 
-.welcome-block {
+.channel-welcome {
+  max-width: 720px;
+  display: grid;
   gap: 12px;
+  text-align: left;
 }
 
-.welcome-chip {
-  justify-self: center;
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: rgba(88, 101, 242, 0.16);
-  color: #c2c8ff;
-  font-size: 12px;
-  font-weight: 700;
+.welcome-icon {
+  width: 78px;
+  height: 78px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--discord-muted-surface);
+  color: var(--discord-text);
+}
+
+.channel-welcome h1 {
+  margin: 0;
+  color: var(--discord-text);
+  font-size: clamp(30px, 4vw, 44px);
+  line-height: 1.08;
+}
+
+.channel-welcome p {
+  max-width: 620px;
+  margin: 0;
+  color: var(--discord-text-muted);
+  font-size: 17px;
+  line-height: 1.55;
 }
 
 .spinner {
   width: 34px;
   height: 34px;
   margin: 0 auto;
-  border: 3px solid rgba(255, 255, 255, 0.12);
+  border: 3px solid var(--discord-strong-border);
   border-top-color: var(--discord-brand);
   border-radius: 50%;
   animation: spin 1s linear infinite;
@@ -635,9 +906,10 @@ onMounted(() => {
 }
 
 .composer {
+  position: relative;
   display: grid;
   gap: 10px;
-  padding: 0 16px 24px;
+  padding: 0 16px 14px;
 }
 
 .pending-files {
@@ -652,7 +924,15 @@ onMounted(() => {
   gap: 10px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--discord-muted-surface);
+}
+
+.pending-image {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--discord-input);
 }
 
 .pending-file-copy {
@@ -672,7 +952,7 @@ onMounted(() => {
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--discord-hover);
   color: var(--discord-text-muted);
   font-size: 12px;
   font-weight: 800;
@@ -680,17 +960,18 @@ onMounted(() => {
 }
 
 .pending-file-remove:hover {
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--discord-hover-strong);
   color: var(--discord-text);
 }
 
 .composer-input {
   display: flex;
-  align-items: flex-end;
-  gap: 12px;
-  padding: 12px 16px;
-  border-radius: 16px;
-  background: #383a40;
+  align-items: center;
+  gap: 10px;
+  min-height: 64px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--discord-surface-soft);
 }
 
 .visually-hidden {
@@ -710,14 +991,35 @@ onMounted(() => {
   height: 36px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--discord-hover);
   color: var(--discord-text);
   font-size: 20px;
   line-height: 1;
 }
 
+.emoji-button {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: var(--discord-text-faint);
+}
+
+.emoji-button:hover:not(:disabled) {
+  background: var(--discord-hover);
+  color: var(--discord-text);
+}
+
+.emoji-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .attach-button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--discord-hover-strong);
 }
 
 .attach-button:disabled {
@@ -727,9 +1029,10 @@ onMounted(() => {
 
 .composer-textarea {
   flex: 1;
-  min-height: 24px;
+  min-height: 28px;
   max-height: 180px;
   border: 0;
+  padding: 6px 0;
   background: transparent;
   color: var(--discord-text);
   line-height: 1.45;
@@ -741,6 +1044,9 @@ onMounted(() => {
 }
 
 .send-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   padding: 10px 16px;
   border-radius: 10px;
   background: var(--discord-brand);
@@ -763,9 +1069,84 @@ onMounted(() => {
   font-size: 13px;
 }
 
-.composer-hint {
-  margin: 0;
+.emoji-picker {
+  position: absolute;
+  right: 22px;
+  bottom: calc(100% + 10px);
+  width: min(380px, calc(100vw - 44px));
+  max-height: 420px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  border: 1px solid var(--discord-border);
+  border-radius: 14px;
+  background: var(--discord-elevated);
+  box-shadow: var(--discord-shadow);
+  overflow: hidden;
+  z-index: 35;
+  animation: emoji-in 120ms ease-out;
+}
+
+.emoji-search {
+  padding: 12px;
+  border-bottom: 1px solid var(--discord-border);
+}
+
+.emoji-search input {
+  width: 100%;
+  height: 38px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 12px;
+  background: var(--discord-input);
+  color: var(--discord-text);
+}
+
+.emoji-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.emoji-group + .emoji-group {
+  margin-top: 14px;
+}
+
+.emoji-group strong {
+  display: block;
+  margin-bottom: 8px;
   color: var(--discord-text-faint);
   font-size: 12px;
+  font-weight: 900;
+}
+
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+}
+
+.emoji-grid button {
+  aspect-ratio: 1;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  font-size: 22px;
+}
+
+.emoji-grid button:hover {
+  background: var(--discord-hover);
+}
+
+@keyframes emoji-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 </style>

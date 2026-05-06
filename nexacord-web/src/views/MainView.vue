@@ -5,16 +5,16 @@
     </aside>
 
     <aside class="channels-pane">
-      <ChannelList />
+      <FriendsSidebar v-if="isHomeRoute" />
+      <ChannelList v-else />
     </aside>
 
     <main class="content-pane">
       <div v-if="showLandingState" class="empty-state">
-        <span class="empty-state-kicker">NexaCord</span>
+        <span class="empty-state-kicker">Nexacord</span>
         <h1>创建你的第一个服务器</h1>
         <p>
-          先建立服务器，再按主题整理频道，在文字和语音空间之间切换，整体布局和交互尽量保持接近
-          Discord。
+          先建立服务器，再按主题整理频道，在文字和语音空间之间切换，整体布局和交互尽量保持接近现代社区工具。
         </p>
         <div class="empty-state-actions">
           <button class="primary-action" type="button" @click="dispatchCreateServer">
@@ -36,17 +36,35 @@
         </div>
       </div>
 
-      <router-view v-else />
+      <div v-else class="channel-workspace" :class="{ 'with-members': shouldShowMemberSidebar }">
+        <router-view />
+        <MemberSidebar v-if="shouldShowMemberSidebar" :server-id="currentServerId" />
+      </div>
     </main>
+
+    <ProfileModal />
+    <PasswordResetModal />
+    <ServerInviteModal />
+    <ServerSettingsModal />
+    <UserProfilePopover />
+    <VoiceAudioSink />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useRoute, useRouter } from 'vue-router';
 import ServerList from '../components/ServerList.vue';
 import ChannelList from '../components/ChannelList.vue';
+import FriendsSidebar from '../components/FriendsSidebar.vue';
+import ProfileModal from '../components/ProfileModal.vue';
+import PasswordResetModal from '../components/PasswordResetModal.vue';
+import ServerInviteModal from '../components/ServerInviteModal.vue';
+import ServerSettingsModal from '../components/ServerSettingsModal.vue';
+import UserProfilePopover from '../components/UserProfilePopover.vue';
+import VoiceAudioSink from '../components/VoiceAudioSink.vue';
+import MemberSidebar from '../components/MemberSidebar.vue';
 import { useChannelStore } from '../stores/channelStore';
 import { useServerStore } from '../stores/serverStore';
 import { useUserStore } from '../stores/userStore';
@@ -60,6 +78,7 @@ const userStore = useUserStore();
 const { servers, currentServerId, currentServer, isLoading } = storeToRefs(serverStore);
 const { channels } = storeToRefs(channelStore);
 const { isAuthenticated } = storeToRefs(userStore);
+const showMemberSidebar = ref(true);
 
 const parseRouteId = (value: unknown): number | null => {
   if (typeof value !== 'string') {
@@ -71,11 +90,20 @@ const parseRouteId = (value: unknown): number | null => {
 };
 
 const showLandingState = computed(
-  () => !currentServer.value && !isLoading.value && servers.value.length === 0
+  () => !isHomeRoute.value && !currentServer.value && !isLoading.value && servers.value.length === 0
 );
 
 const showServerSetupState = computed(
-  () => Boolean(currentServer.value) && !isLoading.value && channels.value.length === 0
+  () =>
+    !isHomeRoute.value &&
+    Boolean(currentServer.value) &&
+    !isLoading.value &&
+    channels.value.length === 0
+);
+
+const isHomeRoute = computed(() => route.name === 'Friends');
+const shouldShowMemberSidebar = computed(
+  () => !isHomeRoute.value && Boolean(currentServerId.value) && showMemberSidebar.value
 );
 
 const dispatchCreateServer = () => {
@@ -86,13 +114,23 @@ const dispatchCreateChannel = () => {
   window.dispatchEvent(new CustomEvent('nexacord:create-channel'));
 };
 
+const toggleMemberSidebar = () => {
+  showMemberSidebar.value = !showMemberSidebar.value;
+};
+
 onMounted(async () => {
+  window.addEventListener('nexacord:toggle-member-sidebar', toggleMemberSidebar);
+
   if (!isAuthenticated.value) {
     return;
   }
 
   const routeServerId = parseRouteId(route.params.serverId);
   await serverStore.fetchServers(routeServerId ?? undefined);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('nexacord:toggle-member-sidebar', toggleMemberSidebar);
 });
 
 watch(
@@ -147,7 +185,7 @@ watch(
     }
 
     channelStore.setCurrentChannel(firstVisibleChannel.id);
-    router.replace(`/server/${serverId}/channel/${firstVisibleChannel.id}`);
+    router.replace(`/servers/${serverId}/channels/${firstVisibleChannel.id}`);
   }
 );
 </script>
@@ -162,13 +200,13 @@ watch(
 }
 
 .servers-pane {
-  background: #1e1f22;
-  border-right: 1px solid rgba(255, 255, 255, 0.04);
+  background: var(--discord-rail);
+  border-right: 1px solid var(--discord-border);
 }
 
 .channels-pane {
-  background: #2b2d31;
-  border-right: 1px solid rgba(255, 255, 255, 0.04);
+  background: var(--discord-surface);
+  border-right: 1px solid var(--discord-border);
 }
 
 .content-pane {
@@ -177,6 +215,19 @@ watch(
   background:
     radial-gradient(circle at top left, rgba(88, 101, 242, 0.12), transparent 24%),
     var(--discord-bg);
+}
+
+.channel-workspace {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.channel-workspace.with-members {
+  grid-template-columns: minmax(0, 1fr) 280px;
 }
 
 .empty-state {

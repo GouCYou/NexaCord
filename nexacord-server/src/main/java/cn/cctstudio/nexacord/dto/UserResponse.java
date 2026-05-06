@@ -14,9 +14,11 @@ import java.time.Instant;
 public class UserResponse {
     private Long id;
     private String username;
+    private String displayName;
     private String email;
     private String avatarUrl;
     private String bannerUrl;
+    private String bannerColor;
     private String bio;
     private String status;
     private Instant createdAt;

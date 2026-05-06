@@ -1,9 +1,15 @@
 export interface User {
   id: number;
   username: string;
+  displayName?: string | null;
   email: string;
   avatarUrl: string | null;
+  bannerUrl?: string | null;
+  bannerColor?: string | null;
+  bio?: string | null;
   status: 'online' | 'offline' | 'away' | 'dnd';
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Server {
@@ -15,6 +21,30 @@ export interface Server {
   createdAt: string;
   updatedAt: string;
   ownerId?: number;
+}
+
+export type MemberRole = 'OWNER' | 'ADMIN' | 'MODERATOR' | 'MEMBER';
+
+export interface Member {
+  id: number;
+  user: User;
+  nickname: string | null;
+  avatarUrl: string | null;
+  role: MemberRole;
+  joinedAt: string;
+}
+
+export interface ServerInvite {
+  id: number;
+  code: string;
+  serverId: number;
+  serverName: string;
+  serverIconUrl: string | null;
+  creatorName: string;
+  expiresAt: string | null;
+  maxUses: number | null;
+  useCount: number | null;
+  createdAt: string;
 }
 
 export interface Channel {
@@ -61,6 +91,44 @@ export interface RegisterRequest {
   username: string;
   email: string;
   password: string;
+  verificationCode: string;
+}
+
+export interface UserProfileUpdateRequest {
+  username?: string;
+  displayName?: string;
+  email?: string;
+  emailVerificationCode?: string;
+  avatarUrl?: string | null;
+  bannerUrl?: string | null;
+  bannerColor?: string | null;
+  bio?: string | null;
+  status?: User['status'];
+}
+
+export interface EmailCodeRequest {
+  email: string;
+  purpose: 'REGISTER' | 'CHANGE_EMAIL' | 'RESET_PASSWORD';
+}
+
+export interface PasswordResetRequest {
+  email: string;
+  verificationCode: string;
+  password: string;
+}
+
+export interface PasswordChangeRequest {
+  verificationCode: string;
+  password: string;
+}
+
+export interface Friendship {
+  id: number;
+  status: 'PENDING' | 'ACCEPTED' | 'BLOCKED';
+  direction: 'INCOMING' | 'OUTGOING';
+  user: User;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ApiResponse<T> {

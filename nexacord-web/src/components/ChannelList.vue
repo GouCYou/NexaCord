@@ -1,12 +1,17 @@
 <template>
   <aside class="channel-list">
     <header class="channel-header">
-      <div class="server-meta">
-        <h2>{{ currentServer?.name || '选择一个服务器' }}</h2>
-        <span class="server-meta-subtitle">
-          {{ currentServer ? `当前共有 ${channels.length} 个频道` : '先从左侧选择或创建一个服务器。' }}
-        </span>
-      </div>
+      <button
+        class="server-title-button"
+        type="button"
+        :disabled="!currentServerId"
+        @click.stop="toggleServerMenu"
+      >
+        <div class="server-meta">
+          <h2>{{ currentServer?.name || '选择一个服务器' }}</h2>
+        </div>
+        <ChevronDown class="server-menu-chevron" :class="{ open: showServerMenu }" :size="18" aria-hidden="true" />
+      </button>
 
       <button
         class="header-icon"
@@ -15,14 +20,29 @@
         :disabled="!currentServerId"
         @click="showCreateChannelModal = true"
       >
-        +
+        <Plus :size="20" aria-hidden="true" />
       </button>
+
+      <div v-if="showServerMenu" class="server-menu" @click.stop>
+        <button type="button" @click="openInviteModal">
+          <UserPlus :size="18" aria-hidden="true" />
+          <span>邀请成员</span>
+        </button>
+        <button type="button" @click="openServerSettings">
+          <Settings :size="18" aria-hidden="true" />
+          <span>服务器设置</span>
+        </button>
+        <button type="button" @click="openCreateFromMenu">
+          <Plus :size="18" aria-hidden="true" />
+          <span>创建频道</span>
+        </button>
+      </div>
     </header>
 
     <div class="channel-scroll">
       <template v-if="currentServerId">
         <div v-if="isLoading" class="empty-state">
-          <strong>正在加载频道...</strong>
+          <strong>正在加载频道……</strong>
           <p>正在获取这个服务器里的频道列表。</p>
         </div>
 
@@ -37,23 +57,37 @@
         <template v-else>
           <section class="channel-group">
             <button class="group-toggle" type="button" @click="toggleCategory('TEXT')">
-              <span>{{ collapsedCategories.TEXT ? '>' : 'v' }}</span>
+              <ChevronRight v-if="collapsedCategories.TEXT" :size="14" aria-hidden="true" />
+              <ChevronDown v-else :size="14" aria-hidden="true" />
               <span>文字频道</span>
             </button>
 
             <div v-show="!collapsedCategories.TEXT" class="channel-items">
-              <button
+              <div
                 v-for="channel in textChannels"
                 :key="channel.id"
-                class="channel-item"
+                class="channel-row"
                 :class="{ active: currentChannelId === channel.id }"
-                :title="channel.topic || channel.name"
-                type="button"
-                @click="selectChannel(channel.id)"
               >
-                <span class="channel-prefix">#</span>
-                <span class="channel-label">{{ channel.name }}</span>
-              </button>
+                <button
+                  class="channel-item"
+                  :title="channel.topic || channel.name"
+                  type="button"
+                  @click="selectChannel(channel.id)"
+                >
+                  <Hash class="channel-prefix" :size="18" aria-hidden="true" />
+                  <span class="channel-label">{{ channel.name }}</span>
+                </button>
+
+                <div class="channel-actions">
+                  <button type="button" title="邀请成员" @click.stop="openChannelInvite(channel.id)">
+                    <UserPlus :size="16" aria-hidden="true" />
+                  </button>
+                  <button type="button" title="编辑频道" @click.stop="openChannelSettings(channel)">
+                    <Settings :size="16" aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
 
               <p v-if="textChannels.length === 0" class="channel-empty">还没有文字频道。</p>
             </div>
@@ -61,23 +95,49 @@
 
           <section class="channel-group">
             <button class="group-toggle" type="button" @click="toggleCategory('VOICE')">
-              <span>{{ collapsedCategories.VOICE ? '>' : 'v' }}</span>
+              <ChevronRight v-if="collapsedCategories.VOICE" :size="14" aria-hidden="true" />
+              <ChevronDown v-else :size="14" aria-hidden="true" />
               <span>语音频道</span>
             </button>
 
             <div v-show="!collapsedCategories.VOICE" class="channel-items">
-              <button
-                v-for="channel in voiceChannels"
-                :key="channel.id"
-                class="channel-item"
-                :class="{ active: currentChannelId === channel.id }"
-                :title="channel.topic || channel.name"
-                type="button"
-                @click="selectChannel(channel.id)"
-              >
-                <span class="channel-prefix">音</span>
-                <span class="channel-label">{{ channel.name }}</span>
-              </button>
+              <template v-for="channel in voiceChannels" :key="channel.id">
+                <div
+                  class="channel-row"
+                  :class="{ active: currentChannelId === channel.id, connected: activeVoiceChannelId === channel.id }"
+                >
+                  <button
+                    class="channel-item"
+                    :title="channel.topic || channel.name"
+                    type="button"
+                    @click="selectChannel(channel.id)"
+                  >
+                    <Volume2 class="channel-prefix" :size="18" aria-hidden="true" />
+                    <span class="channel-label">{{ channel.name }}</span>
+                    <span v-if="activeVoiceChannelId === channel.id" class="voice-duration">{{ voiceParticipantCount }}</span>
+                  </button>
+
+                  <div class="channel-actions">
+                    <button type="button" title="邀请成员" @click.stop="openChannelInvite(channel.id)">
+                      <UserPlus :size="16" aria-hidden="true" />
+                    </button>
+                    <button type="button" title="编辑频道" @click.stop="openChannelSettings(channel)">
+                      <Settings :size="16" aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+
+                <div v-if="activeVoiceChannelId === channel.id" class="voice-members">
+                  <div v-for="participant in visibleVoiceParticipants" :key="participant.id" class="voice-member">
+                    <button class="voice-member-avatar" type="button" @click.stop="openVoiceUserPopover(participant, $event)">
+                      <img :src="participant.avatarUrl || defaultAvatarUrl" :alt="displayNameOf(participant)" />
+                    </button>
+                    <button class="voice-member-name" type="button" @click.stop="openVoiceUserPopover(participant, $event)">
+                      {{ displayNameOf(participant) }}
+                    </button>
+                  </div>
+                </div>
+              </template>
 
               <p v-if="voiceChannels.length === 0" class="channel-empty">还没有语音频道。</p>
             </div>
@@ -91,19 +151,15 @@
       </div>
     </div>
 
-    <footer v-if="currentUser" class="user-panel">
-      <div class="user-avatar">
-        <img v-if="currentUser.avatarUrl" :src="currentUser.avatarUrl" :alt="currentUser.username" />
-        <span v-else>{{ currentUser.username.charAt(0).toUpperCase() }}</span>
-      </div>
+    <UserControlPanel show-logout @logout="logout" />
 
-      <div class="user-meta">
-        <strong>{{ currentUser.username }}</strong>
-        <span>{{ statusLabel }}</span>
-      </div>
-
-      <button class="logout-button" type="button" @click="logout">退出登录</button>
-    </footer>
+    <ChannelSettingsModal
+      v-if="showChannelSettingsModal && selectedChannel"
+      :channel="selectedChannel"
+      @close="closeChannelSettings"
+      @saved="handleChannelSettingsSaved"
+      @deleted="handleChannelDeleted"
+    />
 
     <div v-if="showCreateChannelModal" class="modal-overlay" @click="closeModal">
       <div class="modal-card" @click.stop>
@@ -112,7 +168,9 @@
             <h2>创建频道</h2>
             <p>为 {{ currentServer?.name || '当前服务器' }} 添加一个新的讨论空间。</p>
           </div>
-          <button class="icon-button" type="button" @click="closeModal">x</button>
+          <button class="icon-button" type="button" aria-label="关闭弹窗" @click="closeModal">
+            <X :size="20" aria-hidden="true" />
+          </button>
         </header>
 
         <div class="modal-body">
@@ -145,7 +203,7 @@
             :disabled="isLoading || !newChannel.name.trim() || !currentServerId"
             @click="createChannel"
           >
-            {{ isLoading ? '创建中...' : '创建频道' }}
+            {{ isLoading ? '创建中……' : '创建频道' }}
           </button>
         </footer>
       </div>
@@ -157,20 +215,35 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useRouter } from 'vue-router';
+import { ChevronDown, ChevronRight, Hash, Plus, Settings, UserPlus, Volume2, X } from 'lucide-vue-next';
+import ChannelSettingsModal from './ChannelSettingsModal.vue';
+import UserControlPanel from './UserControlPanel.vue';
 import { useChannelStore } from '../stores/channelStore';
 import { useServerStore } from '../stores/serverStore';
 import { useUserStore } from '../stores/userStore';
+import { useVoiceStore, type VoiceUser } from '../stores/voiceStore';
+import type { Channel } from '../types';
 
 const router = useRouter();
 const serverStore = useServerStore();
 const channelStore = useChannelStore();
 const userStore = useUserStore();
+const voiceStore = useVoiceStore();
 
 const { currentServer, currentServerId } = storeToRefs(serverStore);
 const { channels, currentChannelId, isLoading, error } = storeToRefs(channelStore);
-const { currentUser } = storeToRefs(userStore);
+const {
+  activeChannelId: activeVoiceChannelId,
+  participantCount: voiceParticipantCount,
+  visibleParticipants: visibleVoiceParticipants,
+} = storeToRefs(voiceStore);
+const { displayNameOf } = voiceStore;
 
 const showCreateChannelModal = ref(false);
+const showServerMenu = ref(false);
+const showChannelSettingsModal = ref(false);
+const selectedChannel = ref<Channel | null>(null);
+const defaultAvatarUrl = '/logo.png';
 const newChannel = ref({
   name: '',
   type: 'TEXT' as 'TEXT' | 'VOICE',
@@ -185,24 +258,79 @@ const collapsedCategories = ref({
 const textChannels = computed(() => channels.value.filter((channel) => channel.type === 'TEXT'));
 const voiceChannels = computed(() => channels.value.filter((channel) => channel.type === 'VOICE'));
 
-const statusLabel = computed(() => {
-  const status = currentUser.value?.status || 'online';
-  const labelMap = {
-    online: '在线',
-    offline: '离线',
-    away: '离开',
-    dnd: '请勿打扰',
-  } as const;
-
-  return labelMap[status] || '在线';
-});
-
 const openCreateChannelModal = () => {
   if (!currentServerId.value) {
     return;
   }
 
   showCreateChannelModal.value = true;
+};
+
+const openCreateFromMenu = () => {
+  showServerMenu.value = false;
+  openCreateChannelModal();
+};
+
+const toggleServerMenu = () => {
+  if (!currentServerId.value) {
+    return;
+  }
+
+  showServerMenu.value = !showServerMenu.value;
+};
+
+const closeServerMenu = () => {
+  showServerMenu.value = false;
+};
+
+const openInviteModal = () => {
+  showServerMenu.value = false;
+  window.dispatchEvent(new CustomEvent('nexacord:open-invite'));
+};
+
+const openChannelInvite = (channelId: number) => {
+  selectChannel(channelId);
+  window.dispatchEvent(new CustomEvent('nexacord:open-invite'));
+};
+
+const openChannelSettings = (channel: Channel) => {
+  selectedChannel.value = channel;
+  showChannelSettingsModal.value = true;
+};
+
+const openVoiceUserPopover = (user: VoiceUser, event: MouseEvent) => {
+  window.dispatchEvent(new CustomEvent('nexacord:open-user-popover', {
+    detail: {
+      user,
+      serverName: currentServer.value?.name,
+      x: event.clientX,
+      y: event.clientY,
+    },
+  }));
+};
+
+const closeChannelSettings = () => {
+  selectedChannel.value = null;
+  showChannelSettingsModal.value = false;
+};
+
+const handleChannelSettingsSaved = () => {
+  closeChannelSettings();
+};
+
+const handleChannelDeleted = () => {
+  closeChannelSettings();
+  if (currentServerId.value && currentChannelId.value) {
+    router.push(`/servers/${currentServerId.value}/channels/${currentChannelId.value}`);
+    return;
+  }
+
+  router.push('/');
+};
+
+const openServerSettings = () => {
+  showServerMenu.value = false;
+  window.dispatchEvent(new CustomEvent('nexacord:open-server-settings', { detail: { tab: 'overview' } }));
 };
 
 const toggleCategory = (category: 'TEXT' | 'VOICE') => {
@@ -215,7 +343,7 @@ const selectChannel = (channelId: number) => {
   }
 
   channelStore.setCurrentChannel(channelId);
-  router.push(`/server/${currentServerId.value}/channel/${channelId}`);
+  router.push(`/servers/${currentServerId.value}/channels/${channelId}`);
 };
 
 const closeModal = () => {
@@ -242,21 +370,24 @@ const createChannel = async () => {
 
   if (success && channelStore.currentChannelId) {
     closeModal();
-    router.push(`/server/${currentServerId.value}/channel/${channelStore.currentChannelId}`);
+    router.push(`/servers/${currentServerId.value}/channels/${channelStore.currentChannelId}`);
   }
 };
 
 const logout = () => {
+  voiceStore.leaveChannel();
   userStore.logout();
   router.push('/login');
 };
 
 onMounted(() => {
   window.addEventListener('nexacord:create-channel', openCreateChannelModal);
+  window.addEventListener('click', closeServerMenu);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('nexacord:create-channel', openCreateChannelModal);
+  window.removeEventListener('click', closeServerMenu);
 });
 </script>
 
@@ -266,10 +397,11 @@ onBeforeUnmount(() => {
   height: 100%;
   display: grid;
   grid-template-rows: auto 1fr auto;
-  background: #2b2d31;
+  background: var(--discord-surface);
 }
 
 .channel-header {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -279,17 +411,71 @@ onBeforeUnmount(() => {
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.24);
 }
 
+.server-title-button {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0;
+  background: transparent;
+  color: var(--discord-text);
+  text-align: left;
+}
+
+.server-title-button:disabled {
+  cursor: default;
+}
+
 .server-meta h2 {
   margin: 0;
   font-size: 16px;
   font-weight: 800;
 }
 
-.server-meta-subtitle {
-  display: block;
-  margin-top: 4px;
+.server-menu-chevron {
+  flex-shrink: 0;
   color: var(--discord-text-faint);
-  font-size: 12px;
+  transition: transform 140ms ease;
+}
+
+.server-menu-chevron.open {
+  transform: rotate(180deg);
+}
+
+.server-menu {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: calc(100% + 8px);
+  z-index: 25;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--discord-border);
+  border-radius: 12px;
+  background: var(--discord-elevated);
+  box-shadow: var(--discord-shadow);
+  animation: server-menu-in 120ms ease-out;
+}
+
+.server-menu button {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-radius: 8px;
+  padding: 0 10px;
+  background: transparent;
+  color: var(--discord-text);
+  font-weight: 800;
+  text-align: left;
+}
+
+.server-menu button:hover {
+  background: var(--discord-hover);
+  color: white;
 }
 
 .header-icon {
@@ -302,7 +488,7 @@ onBeforeUnmount(() => {
 }
 
 .header-icon:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--discord-muted-surface);
   color: var(--discord-text);
 }
 
@@ -347,12 +533,29 @@ onBeforeUnmount(() => {
   padding-top: 4px;
 }
 
+.channel-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+}
+
+.channel-row:hover {
+  background: var(--discord-channel-hover);
+}
+
+.channel-row.active {
+  background: var(--discord-hover);
+}
+
 .channel-item {
+  min-width: 0;
+  flex: 1;
   width: 100%;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
+  padding: 8px 70px 8px 10px;
   border-radius: 8px;
   background: transparent;
   color: var(--discord-text-muted);
@@ -360,12 +563,49 @@ onBeforeUnmount(() => {
 }
 
 .channel-item:hover {
-  background: var(--discord-channel-hover);
   color: var(--discord-text);
 }
 
-.channel-item.active {
-  background: rgba(255, 255, 255, 0.08);
+.channel-row.active .channel-item,
+.channel-row:hover .channel-item {
+  color: var(--discord-text);
+}
+
+.channel-row.connected .channel-item,
+.channel-row.connected.active .channel-item,
+.channel-row.connected:hover .channel-item {
+  color: var(--discord-green);
+}
+
+.channel-actions {
+  position: absolute;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.channel-row:hover .channel-actions,
+.channel-row.active .channel-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.channel-actions button {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: var(--discord-text-faint);
+}
+
+.channel-actions button:hover {
+  background: var(--discord-hover-strong);
   color: var(--discord-text);
 }
 
@@ -379,9 +619,68 @@ onBeforeUnmount(() => {
 }
 
 .channel-label {
+  min-width: 0;
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.voice-duration {
+  flex-shrink: 0;
+  min-width: 22px;
+  color: var(--discord-green);
+  font-size: 12px;
+  font-weight: 900;
+  text-align: right;
+}
+
+.voice-members {
+  display: grid;
+  gap: 2px;
+  padding: 2px 8px 4px 38px;
+}
+
+.voice-member {
+  min-height: 28px;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  color: var(--discord-text-muted);
+  font-size: 13px;
+}
+
+.voice-member-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--discord-brand);
+  color: white;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.voice-member-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.voice-member-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .channel-empty,
@@ -397,7 +696,7 @@ onBeforeUnmount(() => {
   place-items: start;
   padding: 14px 12px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--discord-subtle);
 }
 
 .empty-state strong {
@@ -418,11 +717,12 @@ onBeforeUnmount(() => {
 }
 
 .user-panel {
-  display: flex;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto auto auto;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
-  background: #232428;
+  gap: 8px;
+  padding: 8px;
+  background: var(--discord-surface-soft);
   border-top: 1px solid var(--discord-border);
 }
 
@@ -466,17 +766,18 @@ onBeforeUnmount(() => {
   font-size: 12px;
 }
 
-.logout-button {
-  padding: 8px 10px;
+.panel-action {
+  width: 32px;
+  height: 32px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.06);
+  display: grid;
+  place-items: center;
+  background: var(--discord-muted-surface);
   color: var(--discord-text-muted);
-  font-size: 12px;
-  font-weight: 700;
 }
 
-.logout-button:hover {
-  background: rgba(255, 255, 255, 0.1);
+.panel-action:hover {
+  background: var(--discord-pressed);
   color: var(--discord-text);
 }
 
@@ -487,7 +788,7 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(0, 0, 0, 0.72);
+  background: var(--discord-overlay);
   backdrop-filter: blur(8px);
 }
 
@@ -495,7 +796,7 @@ onBeforeUnmount(() => {
   width: min(420px, 100%);
   border: 1px solid var(--discord-border);
   border-radius: 18px;
-  background: #2b2d31;
+  background: var(--discord-surface);
   box-shadow: var(--discord-shadow);
 }
 
@@ -542,9 +843,9 @@ onBeforeUnmount(() => {
 .field select {
   width: 100%;
   padding: 12px 14px;
-  border: 1px solid rgba(0, 0, 0, 0.32);
+  border: 1px solid var(--discord-border);
   border-radius: 10px;
-  background: #1e1f22;
+  background: var(--discord-input);
   color: var(--discord-text);
 }
 
@@ -575,7 +876,7 @@ onBeforeUnmount(() => {
 }
 
 .icon-button:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--discord-muted-surface);
   color: var(--discord-text);
 }
 
@@ -586,12 +887,12 @@ onBeforeUnmount(() => {
 }
 
 .secondary-button {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--discord-hover);
   color: var(--discord-text);
 }
 
 .secondary-button:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--discord-hover-strong);
 }
 
 .primary-button {
@@ -607,5 +908,17 @@ onBeforeUnmount(() => {
 .secondary-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+@keyframes server-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 </style>

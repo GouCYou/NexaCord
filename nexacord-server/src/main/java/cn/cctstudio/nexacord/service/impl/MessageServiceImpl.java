@@ -35,8 +35,8 @@ public class MessageServiceImpl implements MessageService {
 
     @Override
     public Message getMessageById(Long id) {
-        return messageRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Message not found with id: " + id));
+        return messageRepository.findWithAttachmentsById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("没有找到该消息：" + id));
     }
 
     @Override
