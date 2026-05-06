@@ -1,0 +1,104 @@
+####################
+# Nexacord server profile
+# Start with: --spring.profiles.active=server
+####################
+server:
+  port: ${SERVER_PORT:18080}
+  forward-headers-strategy: framework
+  ssl:
+    # If HTTPS is handled by Nginx/Caddy, keep this false.
+    # If Spring Boot serves HTTPS directly on 18080, set true and provide the keystore values below.
+    enabled: ${SERVER_SSL_ENABLED:false}
+    key-store: ${SERVER_SSL_KEY_STORE:}
+    key-store-password: ${SERVER_SSL_KEY_STORE_PASSWORD:}
+    key-store-type: ${SERVER_SSL_KEY_STORE_TYPE:PKCS12}
+    key-alias: ${SERVER_SSL_KEY_ALIAS:}
+
+spring:
+  config:
+    import: optional:file:./application-server.local.yml,optional:file:./application-local.yml
+
+  application:
+    name: nexacord-server
+
+  datasource:
+    url: ${DB_URL:jdbc:mysql://127.0.0.1:3306/nexacord?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false}
+    username: ${DB_USERNAME:nexacord}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  servlet:
+    multipart:
+      max-file-size: ${MAX_FILE_SIZE:25MB}
+      max-request-size: ${MAX_REQUEST_SIZE:50MB}
+
+  mail:
+    host: ${MAIL_HOST:smtp.163.com}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:cctnetwork@163.com}
+    password: ${MAIL_PASSWORD}
+    protocol: smtp
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
+
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    open-in-view: false
+    show-sql: ${JPA_SHOW_SQL:false}
+    properties:
+      hibernate:
+        format_sql: ${HIBERNATE_FORMAT_SQL:false}
+
+  data:
+    redis:
+      repositories:
+        enabled: false
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      database: ${REDIS_DATABASE:0}
+      password: ${REDIS_PASSWORD:}
+
+  mvc:
+    pathmatch:
+      matching-strategy: ant_path_matcher
+
+  jackson:
+    time-zone: Asia/Shanghai
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION:3600000}
+  refresh-token:
+    expiration: ${JWT_REFRESH_EXPIRATION:604800000}
+
+qiniu:
+  access-key: ${QINIU_ACCESS_KEY}
+  secret-key: ${QINIU_SECRET_KEY}
+  bucket: ${QINIU_BUCKET:nexacord}
+  domain: ${QINIU_DOMAIN:oss2.cctstudio.cn}
+  use-https: ${QINIU_USE_HTTPS:true}
+  private-bucket: ${QINIU_PRIVATE_BUCKET:false}
+  region: ${QINIU_REGION:auto}
+
+app:
+  cors:
+    allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:https://weiladream.cn,https://www.weiladream.cn,http://localhost:5173,http://127.0.0.1:5173}
+
+springdoc:
+  api-docs:
+    enabled: ${SPRINGDOC_API_DOCS_ENABLED:false}
+  swagger-ui:
+    enabled: ${SPRINGDOC_SWAGGER_UI_ENABLED:false}
+
+logging:
+  level:
+    org.springframework.web: ${LOG_LEVEL_SPRING_WEB:INFO}
+    org.springframework.web.servlet.mvc.method.annotation: ${LOG_LEVEL_SPRING_MVC:INFO}
+    org.springframework.security: ${LOG_LEVEL_SECURITY:INFO}
+    org.hibernate.SQL: ${LOG_LEVEL_HIBERNATE_SQL:WARN}

@@ -554,7 +554,7 @@ onBeforeUnmount(() => {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   padding: 8px 70px 8px 10px;
   border-radius: 8px;
   background: transparent;
@@ -610,9 +610,11 @@ onBeforeUnmount(() => {
 }
 
 .channel-prefix {
-  flex-shrink: 0;
-  width: 18px;
-  text-align: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  display: grid;
+  place-items: center;
   color: inherit;
   font-size: 12px;
   font-weight: 700;

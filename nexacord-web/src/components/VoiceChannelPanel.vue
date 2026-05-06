@@ -265,6 +265,7 @@ button:disabled {
 }
 
 .voice-grid {
+  min-height: 0;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   align-content: start;
@@ -321,12 +322,18 @@ button:disabled {
 
 .voice-empty {
   grid-column: 1 / -1;
-  min-height: 320px;
+  min-height: 0;
+  margin-top: clamp(52px, 10vh, 104px);
   display: grid;
-  place-content: center;
+  justify-items: center;
+  align-content: start;
   gap: 10px;
   color: var(--discord-text-muted);
   text-align: center;
+}
+
+.voice-empty svg {
+  display: block;
 }
 
 .voice-empty strong {

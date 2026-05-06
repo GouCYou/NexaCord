@@ -79,6 +79,7 @@ const { servers, currentServerId, currentServer, isLoading } = storeToRefs(serve
 const { channels } = storeToRefs(channelStore);
 const { isAuthenticated } = storeToRefs(userStore);
 const showMemberSidebar = ref(true);
+let routeSyncVersion = 0;
 
 const parseRouteId = (value: unknown): number | null => {
   if (typeof value !== 'string') {
@@ -118,15 +119,97 @@ const toggleMemberSidebar = () => {
   showMemberSidebar.value = !showMemberSidebar.value;
 };
 
-onMounted(async () => {
-  window.addEventListener('nexacord:toggle-member-sidebar', toggleMemberSidebar);
+const getRouteServerId = () => parseRouteId(route.params.serverId);
+const getRouteChannelId = () => parseRouteId(route.params.channelId);
+
+const syncRouteState = async () => {
+  const syncVersion = ++routeSyncVersion;
 
   if (!isAuthenticated.value) {
     return;
   }
 
-  const routeServerId = parseRouteId(route.params.serverId);
-  await serverStore.fetchServers(routeServerId ?? undefined);
+  if (isHomeRoute.value) {
+    serverStore.setCurrentServer(null);
+    channelStore.clearChannels();
+    return;
+  }
+
+  const routeServerId = getRouteServerId();
+  if (!routeServerId) {
+    serverStore.setCurrentServer(null);
+    channelStore.clearChannels();
+    if (route.path !== '/') {
+      router.replace('/');
+    }
+    return;
+  }
+
+  if (!servers.value.some((server) => server.id === routeServerId)) {
+    await serverStore.fetchServers(routeServerId);
+    if (syncVersion !== routeSyncVersion) {
+      return;
+    }
+  }
+
+  if (!servers.value.some((server) => server.id === routeServerId)) {
+    serverStore.setCurrentServer(null);
+    channelStore.clearChannels();
+    if (route.path !== '/') {
+      router.replace('/');
+    }
+    return;
+  }
+
+  const isSwitchingServer = currentServerId.value !== routeServerId;
+  serverStore.setCurrentServer(routeServerId);
+  if (isSwitchingServer) {
+    channelStore.clearChannels();
+  }
+
+  const routeChannelId = getRouteChannelId();
+  const loadedChannels = await channelStore.fetchChannels(routeServerId, routeChannelId ?? undefined);
+  if (syncVersion !== routeSyncVersion) {
+    return;
+  }
+
+  const matchedRouteChannel = routeChannelId
+    ? loadedChannels.find((channel) => channel.id === routeChannelId)
+    : null;
+
+  if (matchedRouteChannel) {
+    channelStore.setCurrentChannel(matchedRouteChannel.id);
+    return;
+  }
+
+  const firstVisibleChannel =
+    loadedChannels.find((channel) => channel.type === 'TEXT') || loadedChannels[0];
+
+  if (!firstVisibleChannel) {
+    channelStore.setCurrentChannel(null);
+    return;
+  }
+
+  channelStore.setCurrentChannel(firstVisibleChannel.id);
+  const nextPath = `/servers/${routeServerId}/channels/${firstVisibleChannel.id}`;
+  if (route.path !== nextPath) {
+    router.replace(nextPath);
+  }
+};
+
+const bootstrapWorkspace = async () => {
+  if (!isAuthenticated.value) {
+    return;
+  }
+
+  await userStore.refreshCurrentUser();
+  await serverStore.fetchServers(getRouteServerId() ?? undefined);
+  await syncRouteState();
+};
+
+onMounted(() => {
+  window.addEventListener('nexacord:toggle-member-sidebar', toggleMemberSidebar);
+  void bootstrapWorkspace();
 });
 
 onBeforeUnmount(() => {
@@ -134,58 +217,9 @@ onBeforeUnmount(() => {
 });
 
 watch(
-  () => route.params.serverId,
-  (serverIdParam) => {
-    const routeServerId = parseRouteId(serverIdParam);
-    if (routeServerId && routeServerId !== currentServerId.value) {
-      serverStore.setCurrentServer(routeServerId);
-    }
-  },
-  { immediate: true }
-);
-
-watch(
-  currentServerId,
-  async (serverId) => {
-    if (!serverId) {
-      channelStore.clearChannels();
-      if (route.path !== '/') {
-        router.replace('/');
-      }
-      return;
-    }
-
-    const routeServerId = parseRouteId(route.params.serverId);
-    const routeChannelId = parseRouteId(route.params.channelId);
-
-    const loadedChannels = await channelStore.fetchChannels(
-      serverId,
-      routeServerId === serverId ? routeChannelId ?? undefined : undefined
-    );
-
-    const matchedRouteChannel =
-      routeServerId === serverId && routeChannelId
-        ? loadedChannels.find((channel) => channel.id === routeChannelId)
-        : null;
-
-    if (matchedRouteChannel) {
-      channelStore.setCurrentChannel(matchedRouteChannel.id);
-      return;
-    }
-
-    const firstVisibleChannel =
-      loadedChannels.find((channel) => channel.type === 'TEXT') || loadedChannels[0];
-
-    if (!firstVisibleChannel) {
-      channelStore.setCurrentChannel(null);
-      if (route.path !== '/') {
-        router.replace('/');
-      }
-      return;
-    }
-
-    channelStore.setCurrentChannel(firstVisibleChannel.id);
-    router.replace(`/servers/${serverId}/channels/${firstVisibleChannel.id}`);
+  () => [route.name, route.params.serverId, route.params.channelId],
+  () => {
+    void syncRouteState();
   }
 );
 </script>

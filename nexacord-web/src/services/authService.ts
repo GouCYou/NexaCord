@@ -48,11 +48,17 @@ class AuthService {
 
   getCurrentUser(): User | null {
     const userStr = localStorage.getItem('user');
-    if (userStr) {
-      return JSON.parse(userStr);
+    if (!userStr) {
+      return null;
     }
 
-    return null;
+    try {
+      return JSON.parse(userStr);
+    } catch {
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+      return null;
+    }
   }
 
   isAuthenticated(): boolean {
