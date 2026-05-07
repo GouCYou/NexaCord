@@ -106,6 +106,7 @@ import { useThemeStore } from '../stores/themeStore';
 import { useUserStore } from '../stores/userStore';
 import { useVoiceStore } from '../stores/voiceStore';
 import type { User } from '../types';
+import { displayUserLabel } from '../utils/userDisplay';
 
 defineProps<{
   showLogout?: boolean;
@@ -145,7 +146,7 @@ const statusLabel = computed(() => {
 const themeTitle = computed(() => (isLight.value ? '切换为深色模式' : '切换为浅色模式'));
 const muteTitle = computed(() => (isMuted.value ? '打开麦克风' : '关闭麦克风'));
 const deafenTitle = computed(() => (isDeafened.value ? '恢复收听' : '拒听远端声音'));
-const displayName = computed(() => currentUser.value?.displayName?.trim() || currentUser.value?.username || '用户');
+const displayName = computed(() => displayUserLabel(currentUser.value));
 
 const toggleStatusMenu = () => {
   showStatusMenu.value = !showStatusMenu.value;

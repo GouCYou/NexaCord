@@ -3,6 +3,7 @@ import { defineStore } from 'pinia';
 import websocketService from '../services/websocketService';
 import { useUserStore } from './userStore';
 import type { User } from '../types';
+import { displayUserLabel } from '../utils/userDisplay';
 
 export type VoiceUser = {
   id: number;
@@ -30,12 +31,12 @@ type VoiceSignalMessage = {
 };
 
 const displayNameOf = (user: VoiceUser | User | null | undefined) =>
-  user?.displayName?.trim() || user?.username || '未知用户';
+  displayUserLabel(user) || '未知用户';
 
 const toVoiceUser = (user: User): VoiceUser => ({
   id: user.id,
   username: user.username,
-  displayName: user.displayName || user.username,
+  displayName: user.displayName || null,
   avatarUrl: user.avatarUrl,
   status: user.status,
 });

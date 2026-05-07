@@ -213,6 +213,7 @@ import { useMessageStore, type MessageAttachmentInput } from '../stores/messageS
 import { useUserStore } from '../stores/userStore';
 import { useServerStore } from '../stores/serverStore';
 import type { Attachment, User } from '../types';
+import { displayUserLabel } from '../utils/userDisplay';
 
 dayjs.locale('zh-cn');
 
@@ -294,7 +295,7 @@ const sendButtonLabel = computed(() => {
 const composerError = computed(() => localError.value || error.value);
 
 const displayUserName = (user: { username: string; displayName?: string | null }) =>
-  user.displayName?.trim() || user.username;
+  displayUserLabel(user);
 
 const openUserPopover = (user: User, event: MouseEvent) => {
   window.dispatchEvent(new CustomEvent('nexacord:open-user-popover', {

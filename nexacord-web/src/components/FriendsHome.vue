@@ -54,9 +54,12 @@
               <h2>收到的请求</h2>
               <p v-if="incomingRequests.length === 0" class="empty-copy">暂时没有新的好友请求。</p>
               <article v-for="request in incomingRequests" :key="request.id" class="friend-row">
-                <UserAvatar :user="request.user" />
+                <div class="avatar">
+                  <img :src="avatarUrl(request.user)" :alt="usernameTag(request.user.username)" />
+                  <i :class="['status-dot', request.user.status || 'online']"></i>
+                </div>
                 <div class="friend-copy">
-                  <strong>{{ request.user.username }}</strong>
+                  <strong>{{ usernameTag(request.user.username) }}</strong>
                   <span>想添加你为好友</span>
                 </div>
                 <div class="row-actions">
@@ -74,9 +77,12 @@
               <h2>已发送</h2>
               <p v-if="outgoingRequests.length === 0" class="empty-copy">没有等待对方确认的请求。</p>
               <article v-for="request in outgoingRequests" :key="request.id" class="friend-row">
-                <UserAvatar :user="request.user" />
+                <div class="avatar">
+                  <img :src="avatarUrl(request.user)" :alt="usernameTag(request.user.username)" />
+                  <i :class="['status-dot', request.user.status || 'online']"></i>
+                </div>
                 <div class="friend-copy">
-                  <strong>{{ request.user.username }}</strong>
+                  <strong>{{ usernameTag(request.user.username) }}</strong>
                   <span>正在等待确认</span>
                 </div>
                 <button class="circle-action danger" type="button" title="撤回" @click="removeFriend(request.id)">
@@ -108,9 +114,12 @@
           </div>
 
           <article v-for="friendship in filteredVisibleFriends" v-else :key="friendship.id" class="friend-row">
-            <UserAvatar :user="friendship.user" />
+            <div class="avatar">
+              <img :src="avatarUrl(friendship.user)" :alt="usernameTag(friendship.user.username)" />
+              <i :class="['status-dot', friendship.user.status || 'online']"></i>
+            </div>
             <div class="friend-copy">
-              <strong>{{ friendship.user.username }}</strong>
+              <strong>{{ usernameTag(friendship.user.username) }}</strong>
               <span>{{ statusLabel(friendship.user.status) }}</span>
             </div>
             <div class="row-actions">
@@ -138,7 +147,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineComponent, h, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import {
   Check,
   Gamepad2,
@@ -152,6 +161,7 @@ import {
 } from 'lucide-vue-next';
 import friendService from '../services/friendService';
 import type { Friendship, User } from '../types';
+import { usernameTag } from '../utils/userDisplay';
 
 type FriendTab = 'online' | 'all' | 'pending' | 'add';
 
@@ -198,21 +208,7 @@ const emptyFriendTitle = computed(() => {
   return activeTab.value === 'online' ? '暂时没有在线好友' : '还没有好友';
 });
 
-const UserAvatar = defineComponent({
-  props: {
-    user: {
-      type: Object as () => User,
-      required: true,
-    },
-  },
-  setup(props) {
-    return () =>
-      h('div', { class: 'avatar' }, [
-        h('img', { src: props.user.avatarUrl || '/logo.png', alt: props.user.username }),
-        h('i', { class: ['status-dot', props.user.status || 'online'] }),
-      ]);
-  },
-});
+const avatarUrl = (user: User) => user.avatarUrl || '/logo.png';
 
 const statusLabel = (status: User['status']) => {
   const labels = {
@@ -450,6 +446,8 @@ onBeforeUnmount(() => {
   position: relative;
   width: 40px;
   height: 40px;
+  min-width: 40px;
+  max-width: 40px;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -460,8 +458,11 @@ onBeforeUnmount(() => {
 }
 
 .avatar img {
-  width: 100%;
-  height: 100%;
+  display: block;
+  width: 40px;
+  height: 40px;
+  max-width: 40px;
+  max-height: 40px;
   border-radius: inherit;
   object-fit: cover;
 }

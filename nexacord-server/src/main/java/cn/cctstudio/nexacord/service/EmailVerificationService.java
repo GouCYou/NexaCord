@@ -163,16 +163,15 @@ public class EmailVerificationService {
 
     private String buildEmailHtml(Purpose purpose, String code) {
         return """
-                <div style="margin:0;padding:32px;background:#313338;font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',Arial,sans-serif;color:#f2f3f5;">
-                  <div style="max-width:560px;margin:0 auto;border-radius:18px;overflow:hidden;background:#2b2d31;border:1px solid rgba(255,255,255,.08);box-shadow:0 18px 48px rgba(0,0,0,.28);">
-                    <div style="padding:28px 30px;background:linear-gradient(135deg,#5865f2,#3ba55d);">
-                      <div style="font-size:13px;letter-spacing:.08em;font-weight:800;text-transform:uppercase;">Nexacord</div>
-                      <h1 style="margin:12px 0 0;font-size:26px;line-height:1.2;">%s</h1>
+                <div style="margin:0;padding:32px;background:#f2f3f5;font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',Arial,sans-serif;color:#232428;">
+                  <div style="max-width:560px;margin:0 auto;border-radius:18px;overflow:hidden;background:#ffffff;border:1px solid #dfe1e5;box-shadow:0 18px 48px rgba(30,31,34,.12);">
+                    <div style="padding:30px;background:linear-gradient(135deg,#eef2ff,#e7f7ee);border-bottom:1px solid #dfe1e5;">
+                      <h1 style="margin:0;font-size:28px;line-height:1.2;color:#232428;">%s</h1>
                     </div>
                     <div style="padding:30px;">
-                      <p style="margin:0 0 18px;color:#b5bac1;font-size:15px;line-height:1.7;">请在 Nexacord 页面中输入下面的 6 位验证码。验证码 10 分钟内有效，请勿转发给他人。</p>
-                      <div style="padding:18px 20px;border-radius:14px;background:#1e1f22;color:#fff;font-size:32px;font-weight:900;letter-spacing:.24em;text-align:center;">%s</div>
-                      <p style="margin:18px 0 0;color:#949ba4;font-size:13px;line-height:1.6;">如果这不是你的操作，可以直接忽略这封邮件。</p>
+                      <p style="margin:0 0 18px;color:#4e5058;font-size:15px;line-height:1.7;">请在 Nexacord 页面中输入下面的 6 位验证码。验证码 10 分钟内有效，请勿转发给他人。</p>
+                      <div style="padding:18px 20px;border-radius:14px;background:#f6f7f9;border:1px solid #e3e5e8;color:#232428;font-size:32px;font-weight:900;letter-spacing:.24em;text-align:center;">%s</div>
+                      <p style="margin:18px 0 0;color:#6d6f78;font-size:13px;line-height:1.6;">如果这不是你的操作，可以直接忽略这封邮件。</p>
                     </div>
                   </div>
                 </div>

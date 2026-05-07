@@ -28,16 +28,29 @@
       <p>私信会话会在好友系统继续完善后显示在这里。</p>
     </div>
 
-    <UserControlPanel />
+    <UserControlPanel show-logout @logout="logout" />
   </aside>
 </template>
 
 <script setup lang="ts">
+import { useRouter } from 'vue-router';
 import { Inbox, Search, UserPlus, Users } from 'lucide-vue-next';
 import UserControlPanel from './UserControlPanel.vue';
+import { useUserStore } from '../stores/userStore';
+import { useVoiceStore } from '../stores/voiceStore';
+
+const router = useRouter();
+const userStore = useUserStore();
+const voiceStore = useVoiceStore();
 
 const focusAddFriend = () => {
   window.dispatchEvent(new CustomEvent('nexacord:focus-add-friend'));
+};
+
+const logout = () => {
+  voiceStore.leaveChannel();
+  userStore.logout();
+  router.push('/login');
 };
 
 </script>

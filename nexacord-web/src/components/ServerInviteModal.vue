@@ -29,10 +29,10 @@
             class="friend-row"
           >
             <div class="friend-avatar">
-              <img :src="friendship.user.avatarUrl || defaultAvatarUrl" :alt="friendship.user.username" />
+              <img :src="friendship.user.avatarUrl || defaultAvatarUrl" :alt="usernameTag(friendship.user.username)" />
             </div>
             <div class="friend-copy">
-              <strong>{{ friendship.user.username }}</strong>
+              <strong>{{ usernameTag(friendship.user.username) }}</strong>
               <span>{{ friendship.user.email }}</span>
             </div>
             <button
@@ -72,6 +72,7 @@ import friendService from '../services/friendService';
 import { useChannelStore } from '../stores/channelStore';
 import { useServerStore } from '../stores/serverStore';
 import type { Friendship, ServerInvite } from '../types';
+import { usernameTag } from '../utils/userDisplay';
 
 const serverStore = useServerStore();
 const channelStore = useChannelStore();

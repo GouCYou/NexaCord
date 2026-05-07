@@ -23,7 +23,7 @@
 
         <div class="identity-block">
           <h2>{{ displayName }}</h2>
-          <p>{{ profileUser.username }}</p>
+          <p>{{ usernameTag(profileUser.username) }}</p>
           <span v-if="roleText" class="role-badge">{{ roleText }}</span>
         </div>
 
@@ -56,7 +56,7 @@
         </button>
 
         <label v-if="!isSelf" class="dm-input">
-          <input :placeholder="`私信 @${profileUser.username}`" />
+          <input :placeholder="`私信 ${usernameTag(profileUser.username)}`" />
           <Smile :size="15" aria-hidden="true" />
         </label>
       </div>
@@ -80,6 +80,7 @@ import {
 import { useServerStore } from '../stores/serverStore';
 import { useUserStore } from '../stores/userStore';
 import type { MemberRole, User } from '../types';
+import { displayUserLabel, usernameTag } from '../utils/userDisplay';
 
 type PopoverUser = Partial<User> & {
   id: number;
@@ -121,7 +122,7 @@ const roleLabels: Record<MemberRole, string> = {
 
 const displayName = computed(() => {
   const user = profileUser.value;
-  return user?.displayName?.trim() || user?.username || '用户';
+  return displayUserLabel(user);
 });
 
 const isSelf = computed(() => Boolean(profileUser.value && currentUser.value?.id === profileUser.value.id));

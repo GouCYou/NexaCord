@@ -19,8 +19,19 @@
         <form class="form-body" @submit.prevent="handleRegister">
           <label class="field">
             <span>用户名</span>
-            <input v-model="registerForm.username" type="text" placeholder="请输入用户名" required autofocus />
+            <input
+              v-model="registerForm.username"
+              type="text"
+              placeholder="请输入用户名"
+              autocomplete="username"
+              pattern="[a-z0-9_]+"
+              maxlength="30"
+              required
+              autofocus
+            />
           </label>
+          <p v-if="usernameError" class="error-inline">{{ usernameError }}</p>
+          <p v-else class="hint-inline">用户名只能包含小写英文字母、数字和下划线。</p>
 
           <label class="field">
             <span>邮箱</span>
@@ -122,6 +133,23 @@ const localError = ref('');
 const localNotice = ref('');
 const { isLoading, error } = storeToRefs(userStore);
 
+const usernameError = computed(() => {
+  const username = registerForm.value.username.trim();
+  if (!username) {
+    return '';
+  }
+
+  if (username.length < 3 || username.length > 30) {
+    return '用户名长度需要在 3 到 30 个字符之间。';
+  }
+
+  if (!/^[a-z0-9_]+$/.test(username)) {
+    return '用户名只能使用小写英文字母、数字和下划线。';
+  }
+
+  return '';
+});
+
 const passwordError = computed(() => getPasswordStrengthError(registerForm.value.password));
 const passwordsMismatch = computed(
   () => Boolean(registerForm.value.password || confirmPassword.value) && registerForm.value.password !== confirmPassword.value
@@ -132,6 +160,7 @@ const canSubmit = computed(
     Boolean(registerForm.value.email.trim()) &&
     Boolean(registerForm.value.verificationCode.trim()) &&
     Boolean(registerForm.value.password) &&
+    !usernameError.value &&
     !passwordError.value &&
     !passwordsMismatch.value
 );
@@ -164,7 +193,12 @@ const handleRegister = async () => {
     return;
   }
 
-  const success = await userStore.register(registerForm.value);
+  const success = await userStore.register({
+    ...registerForm.value,
+    username: registerForm.value.username.trim(),
+    email: registerForm.value.email.trim(),
+    verificationCode: registerForm.value.verificationCode.trim(),
+  });
   if (success) {
     router.push('/');
   }

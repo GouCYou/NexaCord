@@ -39,6 +39,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { useServerStore } from '../stores/serverStore';
 import type { Member, MemberRole } from '../types';
+import { usernameTag } from '../utils/userDisplay';
 
 const props = defineProps<{
   serverId: number | null;
@@ -58,7 +59,7 @@ const offlineMembers = computed(() =>
 );
 
 const memberName = (member: Member) =>
-  member.nickname?.trim() || member.user.displayName?.trim() || member.user.username;
+  member.nickname?.trim() || member.user.displayName?.trim() || usernameTag(member.user.username);
 
 const openUserPopover = (member: Member, event: MouseEvent) => {
   window.dispatchEvent(new CustomEvent('nexacord:open-user-popover', {

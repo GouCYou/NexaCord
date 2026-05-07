@@ -10,6 +10,7 @@ import lombok.Data;
 public class RegisterRequest {
     @NotBlank(message = "用户名不能为空。")
     @Size(min = 3, max = 30, message = "用户名长度需要在 3 到 30 个字符之间。")
+    @Pattern(regexp = "^[a-z0-9_]+$", message = "用户名只能使用小写英文字母、数字和下划线。")
     private String username;
 
     @NotBlank(message = "邮箱不能为空。")

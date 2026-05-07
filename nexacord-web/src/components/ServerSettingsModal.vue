@@ -120,10 +120,10 @@
           <template v-else>
             <article v-for="member in members" :key="member.id" class="member-row">
               <div class="member-avatar">
-                <img :src="member.user.avatarUrl || defaultAvatarUrl" :alt="member.user.username" />
+                <img :src="member.user.avatarUrl || defaultAvatarUrl" :alt="usernameTag(member.user.username)" />
               </div>
               <div class="member-copy">
-                <strong>{{ member.user.username }}</strong>
+                <strong>{{ usernameTag(member.user.username) }}</strong>
                 <span>{{ roleLabel(member.role) }}</span>
               </div>
               <select
@@ -161,6 +161,7 @@ import fileService from '../services/fileService';
 import { useServerStore } from '../stores/serverStore';
 import { useUserStore } from '../stores/userStore';
 import type { Member, MemberRole, Server } from '../types';
+import { usernameTag } from '../utils/userDisplay';
 
 type SettingsTab = 'overview' | 'members' | 'invites';
 

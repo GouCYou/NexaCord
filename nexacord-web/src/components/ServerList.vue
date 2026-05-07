@@ -43,8 +43,6 @@
       <span class="server-tooltip">{{ server.name }}</span>
     </div>
 
-    <p v-if="validServers.length === 0" class="server-hint">创建你的第一个服务器</p>
-
     <div v-if="showCreateServerModal" class="modal-overlay" @click="closeModal">
       <div class="modal-card" @click.stop>
         <header class="modal-header">
@@ -303,15 +301,6 @@ onBeforeUnmount(() => {
 .server-entry:focus-within .server-tooltip {
   opacity: 1;
   transform: translateY(-50%) translateX(0) scale(1);
-}
-
-.server-hint {
-  width: 52px;
-  margin: 8px 0 0;
-  color: var(--discord-text-faint);
-  font-size: 11px;
-  line-height: 1.35;
-  text-align: center;
 }
 
 .modal-overlay {

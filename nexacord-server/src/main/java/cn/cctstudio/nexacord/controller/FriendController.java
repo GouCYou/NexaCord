@@ -63,6 +63,9 @@ public class FriendController {
             @AuthenticationPrincipal User currentUser
     ) {
         String usernameOrEmail = request.getUsernameOrEmail().trim();
+        if (usernameOrEmail.startsWith("@") && usernameOrEmail.indexOf('@', 1) < 0) {
+            usernameOrEmail = usernameOrEmail.substring(1);
+        }
         User targetUser = userRepository.findByUsernameOrEmail(usernameOrEmail, usernameOrEmail)
                 .orElseThrow(() -> new ResourceNotFoundException("没有找到这个用户。"));
 
