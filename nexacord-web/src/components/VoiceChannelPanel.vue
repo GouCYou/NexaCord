@@ -51,14 +51,15 @@
         v-for="participant in displayedParticipants"
         :key="participant.id"
         class="voice-tile"
-        :class="{ self: participant.id === currentUser?.id }"
+        :class="{ self: participant.id === currentUser?.id, speaking: isUserSpeaking(participant.id) }"
+        :style="voiceLevelStyle(participant.id)"
         @click="openUserPopover(participant, $event)"
       >
         <div class="voice-avatar">
           <img :src="participant.avatarUrl || defaultAvatarUrl" :alt="displayNameOf(participant)" />
         </div>
         <strong>{{ displayNameOf(participant) }}</strong>
-        <span>{{ participant.id === currentUser?.id ? selfVoiceStatus : '已连接' }}</span>
+        <span>{{ participantVoiceStatus(participant) }}</span>
       </article>
 
       <div v-if="displayedParticipants.length === 0" class="voice-empty">
@@ -99,7 +100,15 @@ const {
   selfVoiceStatus,
   statusText,
 } = storeToRefs(voiceStore);
-const { displayNameOf, joinChannel, leaveChannel, toggleMute, toggleDeafen } = voiceStore;
+const {
+  displayNameOf,
+  getVoiceLevel,
+  isUserSpeaking,
+  joinChannel,
+  leaveChannel,
+  toggleMute,
+  toggleDeafen,
+} = voiceStore;
 const defaultAvatarUrl = '/logo.png';
 
 const isCurrentVoiceChannel = computed(() => activeChannelId.value === props.channelId);
@@ -118,6 +127,18 @@ const localStatusText = computed(() => {
 
 const muteTitle = computed(() => (isMuted.value ? '打开麦克风' : '关闭麦克风'));
 const deafenTitle = computed(() => (isDeafened.value ? '恢复收听' : '拒听远端声音'));
+
+const voiceLevelStyle = (userId: number) => ({
+  '--voice-level': Math.max(0.18, getVoiceLevel(userId)).toFixed(2),
+});
+
+const participantVoiceStatus = (participant: VoiceUser) => {
+  if (isUserSpeaking(participant.id)) {
+    return '正在说话';
+  }
+
+  return participant.id === currentUser.value?.id ? selfVoiceStatus.value : '已连接';
+};
 
 const joinVoice = () => {
   joinChannel({
@@ -273,7 +294,9 @@ button:disabled {
 }
 
 .voice-tile {
+  --voice-level: 0.18;
   min-height: 168px;
+  position: relative;
   display: grid;
   place-items: center;
   align-content: center;
@@ -282,6 +305,11 @@ button:disabled {
   border-radius: 8px;
   background: var(--discord-surface);
   cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
 }
 
 .voice-tile.self {
@@ -289,9 +317,34 @@ button:disabled {
   background: rgba(59, 165, 93, 0.1);
 }
 
+.voice-tile.speaking {
+  border-color: rgba(59, 165, 93, 0.92);
+  background:
+    linear-gradient(180deg, rgba(59, 165, 93, calc(0.08 + var(--voice-level) * 0.08)), transparent),
+    var(--discord-surface);
+  box-shadow:
+    0 0 0 1px rgba(59, 165, 93, 0.24),
+    0 0 calc(18px + var(--voice-level) * 24px) rgba(59, 165, 93, calc(0.18 + var(--voice-level) * 0.22));
+  transform: translateY(-1px);
+}
+
+.voice-tile.speaking::after {
+  content: '正在说话';
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: rgba(59, 165, 93, 0.16);
+  color: var(--discord-green);
+  font-size: 11px;
+  font-weight: 900;
+}
+
 .voice-avatar {
   width: 72px;
   height: 72px;
+  position: relative;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -299,6 +352,16 @@ button:disabled {
   background: var(--discord-brand);
   color: white;
   font-weight: 900;
+  transition:
+    box-shadow 120ms ease,
+    transform 120ms ease;
+}
+
+.voice-tile.speaking .voice-avatar {
+  box-shadow:
+    0 0 0 4px rgba(59, 165, 93, 0.28),
+    0 0 calc(14px + var(--voice-level) * 22px) rgba(59, 165, 93, 0.62);
+  transform: scale(calc(1 + var(--voice-level) * 0.04));
 }
 
 .voice-avatar img {

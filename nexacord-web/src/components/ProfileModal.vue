@@ -387,7 +387,8 @@ const uploadProfileImage = async (event: Event, field: 'avatarUrl' | 'bannerUrl'
   profileError.value = '';
   profileNotice.value = '';
   try {
-    profileForm[field] = await fileService.uploadFile(file);
+    const uploadFile = field === 'avatarUrl' ? await createSquareAvatarFile(file) : file;
+    profileForm[field] = await fileService.uploadFile(uploadFile);
   } catch (error: any) {
     profileError.value =
       error.response?.data?.error ||
@@ -396,6 +397,37 @@ const uploadProfileImage = async (event: Event, field: 'avatarUrl' | 'bannerUrl'
   } finally {
     input.value = '';
   }
+};
+
+const createSquareAvatarFile = async (file: File) => {
+  const bitmap = await createImageBitmap(file);
+  const size = Math.min(bitmap.width, bitmap.height);
+  const sourceX = Math.floor((bitmap.width - size) / 2);
+  const sourceY = Math.floor((bitmap.height - size) / 2);
+  const targetSize = 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = targetSize;
+  canvas.height = targetSize;
+
+  const context = canvas.getContext('2d');
+  if (!context) {
+    bitmap.close();
+    return file;
+  }
+
+  context.drawImage(bitmap, sourceX, sourceY, size, size, 0, 0, targetSize, targetSize);
+  bitmap.close();
+
+  const blob = await new Promise<Blob | null>((resolve) => {
+    canvas.toBlob(resolve, 'image/webp', 0.92);
+  });
+
+  if (!blob) {
+    return file;
+  }
+
+  const fileName = file.name.replace(/\.[^.]+$/, '') || 'avatar';
+  return new File([blob], `${fileName}.webp`, { type: 'image/webp' });
 };
 
 onMounted(() => {

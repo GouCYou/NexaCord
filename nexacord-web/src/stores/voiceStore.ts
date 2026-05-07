@@ -88,9 +88,21 @@ export const useVoiceStore = defineStore('voice', () => {
   const voiceError = ref('');
   const participants = ref<VoiceUser[]>([]);
   const remoteStreams = ref<Array<{ userId: number; stream: MediaStream }>>([]);
+  const speakingUserIds = ref<Set<number>>(new Set());
+  const voiceLevels = ref<Record<number, number>>({});
 
   const peerConnections = new Map<number, RTCPeerConnection>();
   const pendingIceCandidates = new Map<number, RTCIceCandidateInit[]>();
+  const voiceAnalysers = new Map<
+    number,
+    {
+      analyser: AnalyserNode;
+      data: Uint8Array;
+      frameId: number;
+      source: MediaStreamAudioSourceNode;
+    }
+  >();
+  let audioContext: AudioContext | null = null;
   let localStream: MediaStream | null = null;
   let unsubscribeVoice: (() => void) | null = null;
 
@@ -181,6 +193,9 @@ export const useVoiceStore = defineStore('voice', () => {
         },
         video: false,
       });
+      if (audioContext?.state === 'suspended') {
+        await audioContext.resume();
+      }
 
       if (!subscribeVoiceTopic(options.channelId)) {
         throw new Error('无法订阅语音频道。');
@@ -192,6 +207,7 @@ export const useVoiceStore = defineStore('voice', () => {
       activeServerName.value = options.serverName || '';
       isJoined.value = true;
       participants.value = [toVoiceUser(currentUser.value)];
+      setupVoiceAnalyser(currentUser.value.id, localStream, () => !isMuted.value);
 
       websocketService.emit(`/voice/${options.channelId}/join`, {});
     } catch (error: any) {
@@ -330,6 +346,7 @@ export const useVoiceStore = defineStore('voice', () => {
         ...remoteStreams.value.filter((remote) => remote.userId !== remoteUserId),
         { userId: remoteUserId, stream },
       ];
+      setupVoiceAnalyser(remoteUserId, stream);
     };
 
     peerConnection.onconnectionstatechange = () => {
@@ -390,6 +407,106 @@ export const useVoiceStore = defineStore('voice', () => {
     }
   };
 
+  const ensureAudioContext = () => {
+    if (!audioContext) {
+      audioContext = new AudioContext();
+    }
+
+    return audioContext;
+  };
+
+  const setupVoiceAnalyser = (
+    userId: number,
+    stream: MediaStream,
+    shouldMeasure: () => boolean = () => true
+  ) => {
+    removeVoiceAnalyser(userId);
+
+    const audioTracks = stream.getAudioTracks();
+    if (audioTracks.length === 0) {
+      return;
+    }
+
+    const context = ensureAudioContext();
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 512;
+    analyser.smoothingTimeConstant = 0.62;
+
+    const source = context.createMediaStreamSource(stream);
+    source.connect(analyser);
+
+    const data = new Uint8Array(analyser.fftSize);
+    const tick = () => {
+      const currentAnalyser = voiceAnalysers.get(userId);
+      if (!currentAnalyser) {
+        return;
+      }
+
+      let level = 0;
+      if (shouldMeasure()) {
+        analyser.getByteTimeDomainData(data);
+        let sum = 0;
+        for (const value of data) {
+          const centeredValue = (value - 128) / 128;
+          sum += centeredValue * centeredValue;
+        }
+        level = Math.min(1, Math.sqrt(sum / data.length) * 5);
+      }
+
+      setVoiceLevel(userId, level);
+      currentAnalyser.frameId = window.requestAnimationFrame(tick);
+    };
+
+    voiceAnalysers.set(userId, {
+      analyser,
+      data,
+      frameId: window.requestAnimationFrame(tick),
+      source,
+    });
+  };
+
+  const setVoiceLevel = (userId: number, level: number) => {
+    const previousLevel = voiceLevels.value[userId] || 0;
+    const smoothedLevel = previousLevel * 0.55 + level * 0.45;
+    voiceLevels.value = {
+      ...voiceLevels.value,
+      [userId]: smoothedLevel,
+    };
+
+    const nextSpeakingUserIds = new Set(speakingUserIds.value);
+    if (smoothedLevel >= 0.12) {
+      nextSpeakingUserIds.add(userId);
+    } else if (smoothedLevel <= 0.07) {
+      nextSpeakingUserIds.delete(userId);
+    }
+    speakingUserIds.value = nextSpeakingUserIds;
+  };
+
+  const removeVoiceAnalyser = (userId: number) => {
+    const analyser = voiceAnalysers.get(userId);
+    if (analyser) {
+      window.cancelAnimationFrame(analyser.frameId);
+      analyser.source.disconnect();
+      voiceAnalysers.delete(userId);
+    }
+
+    const nextVoiceLevels = { ...voiceLevels.value };
+    delete nextVoiceLevels[userId];
+    voiceLevels.value = nextVoiceLevels;
+
+    if (speakingUserIds.value.has(userId)) {
+      const nextSpeakingUserIds = new Set(speakingUserIds.value);
+      nextSpeakingUserIds.delete(userId);
+      speakingUserIds.value = nextSpeakingUserIds;
+    }
+  };
+
+  const cleanupVoiceAnalysers = () => {
+    [...voiceAnalysers.keys()].forEach(removeVoiceAnalyser);
+    speakingUserIds.value = new Set();
+    voiceLevels.value = {};
+  };
+
   const sendVoiceSignal = (
     targetUserId: number,
     type: VoiceSignalType,
@@ -411,6 +528,7 @@ export const useVoiceStore = defineStore('voice', () => {
     peerConnections.get(remoteUserId)?.close();
     peerConnections.delete(remoteUserId);
     pendingIceCandidates.delete(remoteUserId);
+    removeVoiceAnalyser(remoteUserId);
     remoteStreams.value = remoteStreams.value.filter((remote) => remote.userId !== remoteUserId);
     participants.value = participants.value.filter((participant) => participant.id !== remoteUserId);
   };
@@ -422,6 +540,7 @@ export const useVoiceStore = defineStore('voice', () => {
     peerConnections.forEach((peerConnection) => peerConnection.close());
     peerConnections.clear();
     pendingIceCandidates.clear();
+    cleanupVoiceAnalysers();
 
     localStream?.getTracks().forEach((track) => track.stop());
     localStream = null;
@@ -451,6 +570,9 @@ export const useVoiceStore = defineStore('voice', () => {
     return [...participantMap.values()];
   };
 
+  const isUserSpeaking = (userId: number) => speakingUserIds.value.has(userId);
+  const getVoiceLevel = (userId: number) => voiceLevels.value[userId] || 0;
+
   return {
     activeChannelId,
     activeChannelName,
@@ -462,12 +584,16 @@ export const useVoiceStore = defineStore('voice', () => {
     isDeafened,
     voiceError,
     participants,
+    speakingUserIds,
+    voiceLevels,
     visibleParticipants,
     participantCount,
     remoteStreams,
     statusText,
     selfVoiceStatus,
     displayNameOf,
+    isUserSpeaking,
+    getVoiceLevel,
     isActiveChannel,
     joinChannel,
     startDirectCall,

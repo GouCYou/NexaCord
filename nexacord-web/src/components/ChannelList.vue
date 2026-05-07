@@ -128,7 +128,13 @@
                 </div>
 
                 <div v-if="activeVoiceChannelId === channel.id" class="voice-members">
-                  <div v-for="participant in visibleVoiceParticipants" :key="participant.id" class="voice-member">
+                  <div
+                    v-for="participant in visibleVoiceParticipants"
+                    :key="participant.id"
+                    class="voice-member"
+                    :class="{ speaking: isUserSpeaking(participant.id) }"
+                    :style="voiceLevelStyle(participant.id)"
+                  >
                     <button class="voice-member-avatar" type="button" @click.stop="openVoiceUserPopover(participant, $event)">
                       <img :src="participant.avatarUrl || defaultAvatarUrl" :alt="displayNameOf(participant)" />
                     </button>
@@ -237,7 +243,7 @@ const {
   participantCount: voiceParticipantCount,
   visibleParticipants: visibleVoiceParticipants,
 } = storeToRefs(voiceStore);
-const { displayNameOf } = voiceStore;
+const { displayNameOf, getVoiceLevel, isUserSpeaking } = voiceStore;
 
 const showCreateChannelModal = ref(false);
 const showServerMenu = ref(false);
@@ -257,6 +263,10 @@ const collapsedCategories = ref({
 
 const textChannels = computed(() => channels.value.filter((channel) => channel.type === 'TEXT'));
 const voiceChannels = computed(() => channels.value.filter((channel) => channel.type === 'VOICE'));
+
+const voiceLevelStyle = (userId: number) => ({
+  '--voice-level': Math.max(0.18, getVoiceLevel(userId)).toFixed(2),
+});
 
 const openCreateChannelModal = () => {
   if (!currentServerId.value) {
@@ -649,6 +659,7 @@ onBeforeUnmount(() => {
 }
 
 .voice-member {
+  --voice-level: 0.18;
   min-height: 28px;
   display: grid;
   grid-template-columns: 22px minmax(0, 1fr);
@@ -656,6 +667,16 @@ onBeforeUnmount(() => {
   gap: 8px;
   color: var(--discord-text-muted);
   font-size: 13px;
+  border-radius: 7px;
+  padding: 2px 4px;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.voice-member.speaking {
+  background: rgba(59, 165, 93, calc(0.08 + var(--voice-level) * 0.08));
+  color: var(--discord-green);
 }
 
 .voice-member-avatar {
@@ -670,6 +691,16 @@ onBeforeUnmount(() => {
   font-size: 11px;
   font-weight: 900;
   line-height: 1;
+  transition:
+    box-shadow 120ms ease,
+    transform 120ms ease;
+}
+
+.voice-member.speaking .voice-member-avatar {
+  box-shadow:
+    0 0 0 2px rgba(59, 165, 93, 0.34),
+    0 0 calc(8px + var(--voice-level) * 16px) rgba(59, 165, 93, 0.58);
+  transform: scale(calc(1 + var(--voice-level) * 0.08));
 }
 
 .voice-member-avatar img {
