@@ -124,12 +124,28 @@ const openHome = () => {
   router.push('/');
 };
 
-const selectServer = (serverId: number) => {
+const selectServer = async (serverId: number) => {
   if (!serverId || Number.isNaN(serverId)) {
     return;
   }
 
+  const previousServerId = currentServerId.value;
   serverStore.setCurrentServer(serverId);
+  if (previousServerId !== serverId) {
+    channelStore.clearChannels();
+  }
+
+  const loadedChannels = await channelStore.fetchChannels(serverId);
+  const nextChannel = channelStore.currentChannelId
+    ? loadedChannels.find((channel) => channel.id === channelStore.currentChannelId)
+    : null;
+
+  if (nextChannel) {
+    router.push(`/servers/${serverId}/channels/${nextChannel.id}`);
+    return;
+  }
+
+  router.push(`/servers/${serverId}`);
 };
 
 const closeModal = () => {
@@ -155,6 +171,19 @@ const createServer = async () => {
   });
 
   if (success) {
+    if (serverStore.currentServerId) {
+      const loadedChannels = await channelStore.fetchChannels(serverStore.currentServerId);
+      const nextChannel = channelStore.currentChannelId
+        ? loadedChannels.find((channel) => channel.id === channelStore.currentChannelId)
+        : null;
+
+      if (nextChannel) {
+        router.push(`/servers/${serverStore.currentServerId}/channels/${nextChannel.id}`);
+      } else {
+        router.push(`/servers/${serverStore.currentServerId}`);
+      }
+    }
+
     closeModal();
   }
 };

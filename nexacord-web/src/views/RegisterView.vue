@@ -2,15 +2,12 @@
   <div class="auth-shell">
     <div class="auth-card">
       <section class="brand-panel">
-        <span class="brand-kicker">创建</span>
         <h1>建立属于你的实时交流社区</h1>
-        <p>注册后即可创建服务器和频道，并在熟悉的三栏布局里使用实时消息功能。</p>
       </section>
 
       <section class="form-panel">
         <header class="form-header">
           <h2>创建账号</h2>
-          <p>填写基础信息后即可进入 Nexacord。</p>
         </header>
 
         <div v-if="error || localError" class="error-message">{{ localError || error }}</div>
@@ -84,7 +81,6 @@
           </label>
 
           <p v-if="passwordError" class="error-inline">{{ passwordError }}</p>
-          <p v-else class="hint-inline">{{ passwordPolicyText }}</p>
 
           <p v-if="passwordsMismatch" class="error-inline">
             两次输入的密码不一致。
@@ -115,7 +111,7 @@ import { useRouter } from 'vue-router';
 import authService from '../services/authService';
 import { useUserStore } from '../stores/userStore';
 import type { RegisterRequest } from '../types';
-import { getPasswordStrengthError, passwordPolicyText } from '../utils/passwordPolicy';
+import { getPasswordStrengthError } from '../utils/passwordPolicy';
 
 const router = useRouter();
 const userStore = useUserStore();
@@ -207,14 +203,16 @@ const handleRegister = async () => {
 
 <style scoped>
 .auth-shell {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: 20px;
+  overflow-y: auto;
 }
 
 .auth-card {
   width: min(980px, 100%);
+  max-height: calc(100dvh - 40px);
   display: grid;
   grid-template-columns: 1.05fr 0.95fr;
   border: 1px solid var(--discord-border);
@@ -235,10 +233,7 @@ const handleRegister = async () => {
   align-content: center;
   gap: 16px;
   color: white;
-  background:
-    radial-gradient(circle at top left, rgba(59, 165, 93, 0.28), transparent 34%),
-    radial-gradient(circle at bottom right, rgba(88, 101, 242, 0.3), transparent 40%),
-    var(--discord-surface-soft);
+  background: var(--discord-brand);
 }
 
 .brand-kicker {
@@ -264,8 +259,9 @@ const handleRegister = async () => {
 
 .form-panel {
   display: grid;
-  align-content: center;
+  align-content: start;
   gap: 20px;
+  overflow-y: auto;
   background: color-mix(in srgb, var(--discord-surface) 96%, transparent);
 }
 

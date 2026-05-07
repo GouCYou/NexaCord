@@ -16,3 +16,9 @@ export const displayUserLabel = (user?: UserLike | null) => {
   const displayName = user?.displayName?.trim();
   return displayName || usernameTag(user?.username);
 };
+
+export const compactUserLabel = (user?: UserLike | null) => {
+  const displayName = user?.displayName?.trim();
+  const username = user?.username?.trim();
+  return displayName || username || '用户';
+};

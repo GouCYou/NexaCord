@@ -4,13 +4,11 @@
       <section class="brand-panel">
         <span class="brand-kicker">Nexacord</span>
         <h1>回到你的频道和社区</h1>
-        <p>保留熟悉的服务器栏、频道栏和实时消息流，同时运行在你自己的技术栈上。</p>
       </section>
 
       <section class="form-panel">
         <header class="form-header">
           <h2>欢迎回来</h2>
-          <p>使用用户名或邮箱登录。</p>
         </header>
 
         <div v-if="error || localError" class="error-message">{{ localError || error }}</div>
@@ -93,7 +91,6 @@
           </label>
 
           <p v-if="resetPasswordError" class="error-inline">{{ resetPasswordError }}</p>
-          <p v-else class="hint-inline">{{ passwordPolicyText }}</p>
           <p v-if="resetPasswordsMismatch" class="error-inline">两次输入的密码不一致。</p>
 
           <button class="primary-button" type="submit" :disabled="isResetting || !canResetPassword">
@@ -118,7 +115,7 @@ import { useRoute, useRouter } from 'vue-router';
 import authService from '../services/authService';
 import { useUserStore } from '../stores/userStore';
 import type { LoginRequest } from '../types';
-import { getPasswordStrengthError, passwordPolicyText } from '../utils/passwordPolicy';
+import { getPasswordStrengthError } from '../utils/passwordPolicy';
 
 const router = useRouter();
 const route = useRoute();
@@ -221,14 +218,16 @@ const handleResetPassword = async () => {
 
 <style scoped>
 .auth-shell {
-  min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: 20px;
+  overflow-y: auto;
 }
 
 .auth-card {
   width: min(980px, 100%);
+  max-height: calc(100dvh - 40px);
   display: grid;
   grid-template-columns: 1.05fr 0.95fr;
   border: 1px solid var(--discord-border);
@@ -249,10 +248,7 @@ const handleResetPassword = async () => {
   align-content: center;
   gap: 16px;
   color: white;
-  background:
-    radial-gradient(circle at top left, rgba(88, 101, 242, 0.35), transparent 40%),
-    linear-gradient(160deg, rgba(88, 101, 242, 0.18), transparent),
-    var(--discord-surface-soft);
+  background: var(--discord-brand);
 }
 
 .brand-kicker {
@@ -278,8 +274,9 @@ const handleResetPassword = async () => {
 
 .form-panel {
   display: grid;
-  align-content: center;
+  align-content: start;
   gap: 20px;
+  overflow-y: auto;
   background: color-mix(in srgb, var(--discord-surface) 96%, transparent);
 }
 

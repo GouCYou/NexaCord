@@ -18,7 +18,7 @@ export type WebSocketEvent =
 export type WebSocketEventHandler = (event: WebSocketEvent, payload?: unknown) => void;
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://weiladream.cn:18080/api';
-const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || API_BASE_URL.replace(/\/api$/, '');
+const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || API_BASE_URL.replace(/\/api\/?$/, '');
 
 class WebSocketService {
   private client: Client | null = null;

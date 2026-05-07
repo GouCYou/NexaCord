@@ -1,6 +1,10 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
 import authService from '../services/authService';
 
+const EmptyWorkspace = {
+  template: '<div></div>',
+};
+
 const routes: RouteRecordRaw[] = [
   {
     path: '/',
@@ -12,6 +16,12 @@ const routes: RouteRecordRaw[] = [
         path: '',
         name: 'Friends',
         component: () => import('../components/FriendsHome.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
+        path: '/servers/:serverId',
+        name: 'Server',
+        component: EmptyWorkspace,
         meta: { requiresAuth: true },
       },
       {

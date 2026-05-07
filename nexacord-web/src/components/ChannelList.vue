@@ -325,6 +325,11 @@ const handleChannelDeleted = () => {
     return;
   }
 
+  if (currentServerId.value) {
+    router.push(`/servers/${currentServerId.value}`);
+    return;
+  }
+
   router.push('/');
 };
 

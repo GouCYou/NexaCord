@@ -41,7 +41,6 @@
         </label>
 
         <p v-if="passwordError" class="form-error">{{ passwordError }}</p>
-        <p v-else class="form-hint">{{ passwordPolicyText }}</p>
         <p v-if="confirmPassword && form.password !== confirmPassword" class="form-error">两次输入的密码不一致。</p>
         <p v-if="notice" class="form-notice">{{ notice }}</p>
         <p v-if="localError" class="form-error">{{ localError }}</p>
@@ -65,7 +64,7 @@ import { MailCheck, Save, X } from 'lucide-vue-next';
 import authService from '../services/authService';
 import userService from '../services/userService';
 import { useUserStore } from '../stores/userStore';
-import { getPasswordStrengthError, passwordPolicyText } from '../utils/passwordPolicy';
+import { getPasswordStrengthError } from '../utils/passwordPolicy';
 
 const userStore = useUserStore();
 const { currentUser } = storeToRefs(userStore);
@@ -197,9 +196,11 @@ onBeforeUnmount(() => {
 .password-modal {
   position: relative;
   width: min(520px, calc(100vw - 44px));
+  max-height: calc(100dvh - 48px);
   display: grid;
-  gap: 18px;
-  padding: 48px 34px 30px;
+  gap: 14px;
+  padding: 36px 32px 26px;
+  overflow-y: auto;
   border: 1px solid var(--discord-border);
   border-radius: 14px;
   background:
@@ -229,9 +230,9 @@ onBeforeUnmount(() => {
 
 .password-hero {
   justify-self: center;
-  width: 118px;
-  height: 96px;
-  border-radius: 28px;
+  width: 92px;
+  height: 76px;
+  border-radius: 22px;
   display: grid;
   place-items: center;
   background: color-mix(in srgb, var(--discord-brand) 16%, var(--discord-bg));
@@ -246,7 +247,7 @@ onBeforeUnmount(() => {
 
 .password-heading h2 {
   margin: 0;
-  font-size: 28px;
+  font-size: 26px;
 }
 
 .password-heading p {
