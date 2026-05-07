@@ -2,12 +2,24 @@
   <div class="auth-shell">
     <div class="auth-card">
       <section class="brand-panel">
+        <div class="brand-mark">N</div>
+        <span class="brand-kicker">Nexacord</span>
         <h1>建立属于你的实时交流社区</h1>
+        <p>创建账号后即可进入频道、好友和语音空间。</p>
+        <div class="brand-preview" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
       </section>
 
       <section class="form-panel">
         <header class="form-header">
-          <h2>创建账号</h2>
+          <div>
+            <h2>创建账号</h2>
+            <p>填写信息后进入 Nexacord</p>
+          </div>
+          <router-link class="header-link" to="/login">登录</router-link>
         </header>
 
         <div v-if="error || localError" class="error-message">{{ localError || error }}</div>
@@ -379,13 +391,218 @@ const handleRegister = async () => {
   font-size: 14px;
 }
 
+.auth-shell {
+  place-items: center;
+  padding: 24px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(244, 247, 251, 0.98)),
+    var(--discord-bg);
+}
+
+.auth-card {
+  width: min(1040px, 100%);
+  min-height: min(720px, calc(100dvh - 48px));
+  max-height: calc(100dvh - 48px);
+  grid-template-columns: minmax(360px, 0.96fr) minmax(360px, 0.9fr);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.16);
+}
+
+.brand-panel {
+  position: relative;
+  align-content: end;
+  min-height: 520px;
+  padding: 48px;
+  color: #ffffff;
+  background:
+    linear-gradient(145deg, rgba(9, 14, 28, 0.94), rgba(25, 40, 76, 0.9) 58%, rgba(23, 93, 112, 0.88)),
+    #111827;
+}
+
+.brand-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.18;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.22) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.18) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+
+.brand-panel > * {
+  position: relative;
+}
+
+.brand-mark {
+  width: 56px;
+  height: 56px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  font-size: 24px;
+  font-weight: 900;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.brand-kicker {
+  color: rgba(255, 255, 255, 0.78);
+  letter-spacing: 0.16em;
+}
+
+.brand-panel h1 {
+  max-width: 500px;
+  color: #ffffff;
+  font-size: clamp(40px, 4.5vw, 60px);
+  line-height: 1;
+}
+
+.brand-panel p {
+  max-width: 360px;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.brand-preview {
+  width: min(360px, 100%);
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.brand-preview span {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.brand-preview span:nth-child(2) {
+  width: 72%;
+  background: rgba(125, 211, 252, 0.54);
+}
+
+.brand-preview span:nth-child(3) {
+  width: 46%;
+  background: rgba(134, 239, 172, 0.52);
+}
+
+.form-panel {
+  min-height: 0;
+  padding: 40px 48px;
+  overflow-y: auto;
+  background: rgba(248, 250, 252, 0.88);
+  color: #111827;
+}
+
+.form-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.form-header h2 {
+  color: #111827;
+}
+
+.form-header p,
+.field span,
+.form-footer {
+  color: #64748b;
+}
+
+.header-link {
+  flex: 0 0 auto;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #111827;
+  font-weight: 800;
+}
+
+.header-link:hover {
+  background: #cbd5e1;
+  color: #111827;
+}
+
+.form-body {
+  gap: 13px;
+}
+
+.field {
+  gap: 6px;
+}
+
+.field input {
+  border-color: rgba(15, 23, 42, 0.1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #111827;
+}
+
+.primary-button {
+  border-radius: 14px;
+  background: #2563eb;
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.22);
+}
+
+.primary-button:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.secondary-button {
+  border-radius: 14px;
+  background: #e2e8f0;
+  color: #111827;
+}
+
+.form-footer {
+  position: sticky;
+  bottom: -40px;
+  padding-top: 8px;
+  background: linear-gradient(180deg, transparent, rgba(248, 250, 252, 0.96) 38%);
+}
+
 @media (max-width: 860px) {
   .auth-card {
     grid-template-columns: 1fr;
+    max-height: none;
   }
 
   .brand-panel {
+    min-height: 260px;
     padding-bottom: 24px;
+  }
+}
+
+@media (max-height: 760px) {
+  .auth-shell {
+    align-items: start;
+  }
+
+  .auth-card {
+    min-height: calc(100dvh - 32px);
+    max-height: none;
+  }
+
+  .brand-panel,
+  .form-panel {
+    padding: 30px;
+  }
+
+  .brand-preview {
+    display: none;
   }
 }
 </style>

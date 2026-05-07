@@ -18,6 +18,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -25,6 +26,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -35,6 +37,7 @@ public class ServerController {
     private final MemberRepository memberRepository;
     private final UserRepository userRepository;
     private final ServerInviteRepository serverInviteRepository;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @PostMapping
     public ResponseEntity<Server> createServer(@Valid @RequestBody Server server, @AuthenticationPrincipal User currentUser) {
@@ -115,7 +118,26 @@ public class ServerController {
                 .role(Member.Role.MEMBER)
                 .build();
 
-        return new ResponseEntity<>(MemberResponse.from(memberRepository.save(member)), HttpStatus.CREATED);
+        MemberResponse response = MemberResponse.from(memberRepository.save(member));
+        messagingTemplate.convertAndSend(
+                "/topic/servers/update",
+                Map.of(
+                        "type", "MEMBER_ADDED",
+                        "serverId", id,
+                        "userId", userId,
+                        "member", response
+                )
+        );
+        messagingTemplate.convertAndSend(
+                "/topic/servers/user/" + userId,
+                Map.of(
+                        "type", "MEMBER_ADDED",
+                        "serverId", id,
+                        "member", response
+                )
+        );
+
+        return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
     @PatchMapping("/{serverId}/members/{memberId}/role")

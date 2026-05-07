@@ -9,8 +9,30 @@ export const useUserStore = defineStore('user', () => {
   const currentUser = ref<User | null>(null);
   const isLoading = ref(false);
   const error = ref<string | null>(null);
+  let statusRealtimeInitialized = false;
 
   const isAuthenticated = computed(() => Boolean(currentUser.value));
+
+  const initializeStatusRealtime = () => {
+    if (statusRealtimeInitialized) {
+      return;
+    }
+
+    websocketService.on('user:status:update', (_event, payload) => {
+      const author = (payload as { author?: Pick<User, 'id' | 'status'> })?.author;
+      const existingUser = currentUser.value;
+      if (!author?.id || !existingUser || author.id !== existingUser.id || !author.status) {
+        return;
+      }
+
+      currentUser.value = {
+        ...existingUser,
+        status: author.status,
+      };
+      authService.setCurrentUser(currentUser.value);
+    });
+    statusRealtimeInitialized = true;
+  };
 
   const initializeUser = () => {
     const storedUser = authService.getCurrentUser();
@@ -22,6 +44,7 @@ export const useUserStore = defineStore('user', () => {
     }
 
     currentUser.value = storedUser;
+    initializeStatusRealtime();
     websocketService.initialize(token);
   };
 
@@ -35,6 +58,7 @@ export const useUserStore = defineStore('user', () => {
 
       const token = authService.getToken();
       if (token) {
+        initializeStatusRealtime();
         websocketService.initialize(token);
       }
 
@@ -91,6 +115,7 @@ export const useUserStore = defineStore('user', () => {
 
       const token = authService.getToken();
       if (token) {
+        initializeStatusRealtime();
         websocketService.initialize(token);
       }
 

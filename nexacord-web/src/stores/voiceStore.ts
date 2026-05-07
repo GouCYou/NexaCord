@@ -41,6 +41,39 @@ const toVoiceUser = (user: User): VoiceUser => ({
   status: user.status,
 });
 
+const directRoomIdFor = (leftUserId: number, rightUserId: number) => {
+  const [left, right] = [leftUserId, rightUserId].sort((a, b) => a - b);
+  let hash = 2166136261;
+  for (const char of `${left}:${right}`) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return -Math.abs(hash || 1);
+};
+
+const parseIceServers = (): RTCIceServer[] => {
+  const defaultIceServers: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }];
+  const rawIceServers = import.meta.env.VITE_RTC_ICE_SERVERS;
+  if (!rawIceServers) {
+    return defaultIceServers;
+  }
+
+  try {
+    const parsedIceServers = JSON.parse(rawIceServers) as RTCIceServer[];
+    return Array.isArray(parsedIceServers) && parsedIceServers.length > 0
+      ? parsedIceServers
+      : defaultIceServers;
+  } catch {
+    const urls = String(rawIceServers)
+      .split(',')
+      .map((url) => url.trim())
+      .filter(Boolean);
+
+    return urls.length > 0 ? [{ urls }] : defaultIceServers;
+  }
+};
+
 export const useVoiceStore = defineStore('voice', () => {
   const userStore = useUserStore();
 
@@ -57,6 +90,7 @@ export const useVoiceStore = defineStore('voice', () => {
   const remoteStreams = ref<Array<{ userId: number; stream: MediaStream }>>([]);
 
   const peerConnections = new Map<number, RTCPeerConnection>();
+  const pendingIceCandidates = new Map<number, RTCIceCandidateInit[]>();
   let localStream: MediaStream | null = null;
   let unsubscribeVoice: (() => void) | null = null;
 
@@ -168,6 +202,21 @@ export const useVoiceStore = defineStore('voice', () => {
     }
   };
 
+  const startDirectCall = async (
+    user: Pick<User, 'id' | 'username'> & Partial<Pick<User, 'displayName' | 'avatarUrl' | 'status'>>
+  ) => {
+    if (!currentUser.value || user.id === currentUser.value.id) {
+      return;
+    }
+
+    await joinChannel({
+      channelId: directRoomIdFor(currentUser.value.id, user.id),
+      channelName: `与 ${displayUserLabel(user)} 的通话`,
+      serverId: null,
+      serverName: '私信',
+    });
+  };
+
   const leaveChannel = () => {
     if (isJoined.value && activeChannelId.value) {
       websocketService.emit(`/voice/${activeChannelId.value}/leave`, {});
@@ -236,12 +285,14 @@ export const useVoiceStore = defineStore('voice', () => {
     }
 
     if (message.type === 'VOICE_ANSWER' && message.description) {
-      await peerConnections.get(senderId)?.setRemoteDescription(message.description);
+      const peerConnection = peerConnections.get(senderId);
+      await peerConnection?.setRemoteDescription(message.description);
+      await flushPendingIceCandidates(senderId);
       return;
     }
 
     if (message.type === 'VOICE_ICE_CANDIDATE' && message.candidate) {
-      await peerConnections.get(senderId)?.addIceCandidate(message.candidate);
+      await addIceCandidate(senderId, message.candidate);
     }
   };
 
@@ -252,7 +303,7 @@ export const useVoiceStore = defineStore('voice', () => {
     }
 
     const peerConnection = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+      iceServers: parseIceServers(),
     });
 
     localStream?.getTracks().forEach((track) => {
@@ -281,6 +332,18 @@ export const useVoiceStore = defineStore('voice', () => {
       ];
     };
 
+    peerConnection.onconnectionstatechange = () => {
+      if (['failed', 'disconnected'].includes(peerConnection.connectionState)) {
+        voiceError.value = '语音连接不稳定，可能需要配置 TURN 中继服务器。';
+      }
+    };
+
+    peerConnection.oniceconnectionstatechange = () => {
+      if (['failed', 'disconnected'].includes(peerConnection.iceConnectionState)) {
+        voiceError.value = '无法建立稳定的语音媒体连接，请检查 TURN/UDP 网络配置。';
+      }
+    };
+
     peerConnections.set(remoteUserId, peerConnection);
     return peerConnection;
   };
@@ -295,9 +358,36 @@ export const useVoiceStore = defineStore('voice', () => {
   const acceptOffer = async (remoteUserId: number, description: RTCSessionDescriptionInit) => {
     const peerConnection = createPeerConnection(remoteUserId);
     await peerConnection.setRemoteDescription(description);
+    await flushPendingIceCandidates(remoteUserId);
     const answer = await peerConnection.createAnswer();
     await peerConnection.setLocalDescription(answer);
     sendVoiceSignal(remoteUserId, 'VOICE_ANSWER', { description: answer });
+  };
+
+  const addIceCandidate = async (remoteUserId: number, candidate: RTCIceCandidateInit) => {
+    const peerConnection = peerConnections.get(remoteUserId);
+    if (!peerConnection?.remoteDescription) {
+      pendingIceCandidates.set(remoteUserId, [
+        ...(pendingIceCandidates.get(remoteUserId) || []),
+        candidate,
+      ]);
+      return;
+    }
+
+    await peerConnection.addIceCandidate(candidate);
+  };
+
+  const flushPendingIceCandidates = async (remoteUserId: number) => {
+    const peerConnection = peerConnections.get(remoteUserId);
+    const candidates = pendingIceCandidates.get(remoteUserId) || [];
+    if (!peerConnection?.remoteDescription || candidates.length === 0) {
+      return;
+    }
+
+    pendingIceCandidates.delete(remoteUserId);
+    for (const candidate of candidates) {
+      await peerConnection.addIceCandidate(candidate);
+    }
   };
 
   const sendVoiceSignal = (
@@ -320,6 +410,7 @@ export const useVoiceStore = defineStore('voice', () => {
   const closePeer = (remoteUserId: number) => {
     peerConnections.get(remoteUserId)?.close();
     peerConnections.delete(remoteUserId);
+    pendingIceCandidates.delete(remoteUserId);
     remoteStreams.value = remoteStreams.value.filter((remote) => remote.userId !== remoteUserId);
     participants.value = participants.value.filter((participant) => participant.id !== remoteUserId);
   };
@@ -330,6 +421,7 @@ export const useVoiceStore = defineStore('voice', () => {
 
     peerConnections.forEach((peerConnection) => peerConnection.close());
     peerConnections.clear();
+    pendingIceCandidates.clear();
 
     localStream?.getTracks().forEach((track) => track.stop());
     localStream = null;
@@ -378,6 +470,7 @@ export const useVoiceStore = defineStore('voice', () => {
     displayNameOf,
     isActiveChannel,
     joinChannel,
+    startDirectCall,
     leaveChannel,
     toggleMute,
     toggleDeafen,

@@ -66,18 +66,21 @@ import UserProfilePopover from '../components/UserProfilePopover.vue';
 import VoiceAudioSink from '../components/VoiceAudioSink.vue';
 import MemberSidebar from '../components/MemberSidebar.vue';
 import { useChannelStore } from '../stores/channelStore';
+import { useDirectMessageStore } from '../stores/directMessageStore';
 import { useServerStore } from '../stores/serverStore';
 import { useUserStore } from '../stores/userStore';
+import websocketService from '../services/websocketService';
 
 const route = useRoute();
 const router = useRouter();
 const serverStore = useServerStore();
 const channelStore = useChannelStore();
 const userStore = useUserStore();
+const directMessageStore = useDirectMessageStore();
 
 const { servers, currentServerId, currentServer, isLoading } = storeToRefs(serverStore);
 const { channels } = storeToRefs(channelStore);
-const { isAuthenticated } = storeToRefs(userStore);
+const { currentUser, isAuthenticated } = storeToRefs(userStore);
 const showMemberSidebar = ref(true);
 let routeSyncVersion = 0;
 
@@ -102,7 +105,7 @@ const showServerSetupState = computed(
     channels.value.length === 0
 );
 
-const isHomeRoute = computed(() => route.name === 'Friends');
+const isHomeRoute = computed(() => route.name === 'Friends' || route.name === 'DirectConversation');
 const shouldShowMemberSidebar = computed(
   () => !isHomeRoute.value && Boolean(currentServerId.value) && showMemberSidebar.value
 );
@@ -203,17 +206,29 @@ const bootstrapWorkspace = async () => {
   }
 
   await userStore.refreshCurrentUser();
+  directMessageStore.initializeRealtime();
   await serverStore.fetchServers(getRouteServerId() ?? undefined);
   await syncRouteState();
 };
 
+const handleServerRealtimeUpdate = (_event: unknown, payload: unknown) => {
+  const update = payload as { userId?: number };
+  if (update?.userId && update.userId !== currentUser.value?.id) {
+    return;
+  }
+
+  void serverStore.fetchServers(getRouteServerId() ?? undefined);
+};
+
 onMounted(() => {
   window.addEventListener('nexacord:toggle-member-sidebar', toggleMemberSidebar);
+  websocketService.on('server:update', handleServerRealtimeUpdate);
   void bootstrapWorkspace();
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('nexacord:toggle-member-sidebar', toggleMemberSidebar);
+  websocketService.off('server:update', handleServerRealtimeUpdate);
 });
 
 watch(

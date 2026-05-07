@@ -131,6 +131,31 @@ export interface Friendship {
   updatedAt: string;
 }
 
+export interface DirectMessage {
+  id: number;
+  conversationId: number;
+  content: string;
+  author: User;
+  createdAt: string;
+  updatedAt: string;
+  edited: boolean;
+  deleted: boolean;
+}
+
+export interface DirectConversation {
+  id: number;
+  otherUser: User;
+  lastMessage: DirectMessage | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DirectRealtimeEvent {
+  type: 'CONVERSATION_UPDATED' | 'MESSAGE_CREATED';
+  conversation: DirectConversation;
+  message: DirectMessage | null;
+}
+
 export interface ApiResponse<T> {
   data: T;
   message?: string;

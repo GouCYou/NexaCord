@@ -671,6 +671,52 @@ onBeforeUnmount(() => {
 .role-card.admin { border-color: rgba(88, 101, 242, 0.52); }
 .role-card.member { border-color: rgba(59, 165, 93, 0.45); }
 
+.role-card {
+  position: relative;
+  min-height: 104px;
+  align-content: end;
+  overflow: hidden;
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--discord-elevated) 88%, transparent), var(--discord-surface));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.role-card::before {
+  content: '';
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  width: 34px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.6;
+}
+
+.role-card.owner {
+  color: #f0b232;
+  background: linear-gradient(180deg, rgba(240, 178, 50, 0.12), var(--discord-surface));
+}
+
+.role-card.admin {
+  color: #98a1ff;
+  background: linear-gradient(180deg, rgba(88, 101, 242, 0.14), var(--discord-surface));
+}
+
+.role-card.member {
+  color: var(--discord-green);
+  background: linear-gradient(180deg, rgba(59, 165, 93, 0.12), var(--discord-surface));
+}
+
+.role-card strong {
+  color: var(--discord-text);
+}
+
+.role-card span {
+  color: var(--discord-text-muted);
+}
+
 .members-panel {
   display: grid;
   gap: 8px;
@@ -678,6 +724,11 @@ onBeforeUnmount(() => {
   border-radius: 14px;
   background: var(--discord-surface);
   overflow: hidden;
+}
+
+.members-panel {
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--discord-surface) 86%, var(--discord-elevated));
 }
 
 .members-panel header {
@@ -688,9 +739,20 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid var(--discord-border);
 }
 
+.members-panel header {
+  min-height: 62px;
+  padding: 16px 18px;
+  background: var(--discord-elevated);
+}
+
 .members-panel header button {
   background: var(--discord-hover);
   color: var(--discord-text);
+}
+
+.members-panel header button {
+  border-radius: 8px;
+  background: var(--discord-muted-surface);
 }
 
 .member-status {
@@ -707,6 +769,16 @@ onBeforeUnmount(() => {
   padding: 12px 16px;
 }
 
+.member-row {
+  min-height: 66px;
+  padding: 12px 18px;
+  transition: background-color 120ms ease;
+}
+
+.member-row:hover {
+  background: var(--discord-hover);
+}
+
 .member-row + .member-row {
   border-top: 1px solid var(--discord-border);
 }
@@ -721,6 +793,20 @@ onBeforeUnmount(() => {
   color: white;
   font-weight: 900;
   overflow: hidden;
+}
+
+.member-avatar {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--discord-bg) 70%, transparent);
+}
+
+.member-row select {
+  min-height: 40px;
+  border-radius: 8px;
+  background: var(--discord-elevated);
+}
+
+.remove-button {
+  border-radius: 8px;
 }
 
 .member-copy {

@@ -6,6 +6,8 @@ SET FOREIGN_KEY_CHECKS = 0;
 -- 如果表已存在则先删除
 DROP TABLE IF EXISTS attachments;
 DROP TABLE IF EXISTS server_invites;
+DROP TABLE IF EXISTS direct_messages;
+DROP TABLE IF EXISTS direct_conversations;
 DROP TABLE IF EXISTS friendships;
 DROP TABLE IF EXISTS messages;
 DROP TABLE IF EXISTS channels;
@@ -97,6 +99,32 @@ CREATE TABLE friendships (
     FOREIGN KEY (addressee_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+-- 创建私聊会话表
+CREATE TABLE direct_conversations (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_one_id BIGINT NOT NULL,
+    user_two_id BIGINT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_one_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_two_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY uk_direct_conversation_users (user_one_id, user_two_id)
+);
+
+-- 创建私聊消息表
+CREATE TABLE direct_messages (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    content TEXT,
+    conversation_id BIGINT NOT NULL,
+    author_id BIGINT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    is_edited BOOLEAN NOT NULL DEFAULT FALSE,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    FOREIGN KEY (conversation_id) REFERENCES direct_conversations(id) ON DELETE CASCADE,
+    FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 -- 创建服务器邀请链接表
 CREATE TABLE server_invites (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -133,6 +161,10 @@ CREATE INDEX idx_members_user_id ON members(user_id);
 CREATE INDEX idx_members_server_id ON members(server_id);
 CREATE INDEX idx_friendships_requester ON friendships(requester_id);
 CREATE INDEX idx_friendships_addressee ON friendships(addressee_id);
+CREATE INDEX idx_direct_conversations_user_one ON direct_conversations(user_one_id);
+CREATE INDEX idx_direct_conversations_user_two ON direct_conversations(user_two_id);
+CREATE INDEX idx_direct_messages_conversation ON direct_messages(conversation_id);
+CREATE INDEX idx_direct_messages_author ON direct_messages(author_id);
 CREATE INDEX idx_server_invites_code ON server_invites(code);
 CREATE INDEX idx_attachments_message_id ON attachments(message_id);
 
@@ -160,5 +192,6 @@ INSERT INTO channels (name, type, topic, server_id) VALUES
 -- 4. 消息发送和接收
 -- 5. 文件附件
 -- 6. 成员角色和基础权限
+-- 7. 好友私聊
 
 -- 更多接口信息可参考接口文档。

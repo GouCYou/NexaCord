@@ -3,19 +3,23 @@ package cn.cctstudio.nexacord.websocket;
 import cn.cctstudio.nexacord.dto.websocket.VoiceSignalMessage;
 import cn.cctstudio.nexacord.dto.websocket.WebSocketMessage;
 import cn.cctstudio.nexacord.model.User;
+import cn.cctstudio.nexacord.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.EventListener;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
+import org.springframework.web.socket.messaging.SessionConnectEvent;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
 import java.security.Principal;
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Controller
@@ -23,7 +27,12 @@ public class WebSocketMessageController {
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
 
+    @Autowired
+    private UserRepository userRepository;
+
     private final Map<Long, Map<Long, VoiceSignalMessage.UserInfo>> voiceParticipants = new ConcurrentHashMap<>();
+    private final Map<String, Long> sessionUsers = new ConcurrentHashMap<>();
+    private final Map<Long, Set<String>> userSessions = new ConcurrentHashMap<>();
 
     // 处理聊天消息
     @MessageMapping("/channel/{channelId}/send-message")
@@ -89,14 +98,7 @@ public class WebSocketMessageController {
             return;
         }
 
-        user.setStatus(status);
-        
-        WebSocketMessage message = new WebSocketMessage();
-        message.setAuthor(toWebSocketUserInfo(user));
-        message.setType(WebSocketMessage.WebSocketMessageType.ONLINE_STATUS);
-
-        // 广播状态更新到所有关注该用户的客户端
-        messagingTemplate.convertAndSend("/topic/users/" + user.getId() + "/status", message);
+        updateUserStatus(user.getId(), normalizeStatus(status), true);
     }
 
     @MessageMapping("/voice/{channelId}/join")
@@ -151,14 +153,48 @@ public class WebSocketMessageController {
     }
 
     @EventListener
+    public void handleSessionConnect(SessionConnectEvent event) {
+        StompHeaderAccessor accessor = StompHeaderAccessor.wrap(event.getMessage());
+        User user = resolveUser(accessor.getUser());
+        String sessionId = accessor.getSessionId();
+        if (user == null || user.getId() == null || sessionId == null) {
+            return;
+        }
+
+        sessionUsers.put(sessionId, user.getId());
+        userSessions.computeIfAbsent(user.getId(), ignored -> ConcurrentHashMap.newKeySet()).add(sessionId);
+        updateUserStatus(user.getId(), "online", false);
+    }
+
+    @EventListener
     public void handleSessionDisconnect(SessionDisconnectEvent event) {
-        User user = resolveUser(event.getUser());
-        if (user == null || user.getId() == null) {
+        Long userId = sessionUsers.remove(event.getSessionId());
+        if (userId == null) {
+            User user = resolveUser(event.getUser());
+            userId = user == null ? null : user.getId();
+        }
+
+        if (userId == null) {
+            return;
+        }
+
+        Long disconnectedUserId = userId;
+        Set<String> sessions = userSessions.get(disconnectedUserId);
+        if (sessions != null) {
+            sessions.remove(event.getSessionId());
+            if (sessions.isEmpty()) {
+                userSessions.remove(disconnectedUserId);
+                updateUserStatus(disconnectedUserId, "offline", true);
+            }
+        }
+
+        User user = userRepository.findById(disconnectedUserId).orElse(null);
+        if (user == null) {
             return;
         }
 
         VoiceSignalMessage.UserInfo sender = toVoiceUserInfo(user);
-        voiceParticipants.keySet().forEach((channelId) -> removeVoiceParticipant(channelId, user.getId(), sender));
+        voiceParticipants.keySet().forEach((channelId) -> removeVoiceParticipant(channelId, disconnectedUserId, sender));
     }
 
     private VoiceSignalMessage buildVoiceMessage(
@@ -204,6 +240,60 @@ public class WebSocketMessageController {
         }
 
         return null;
+    }
+
+    private void updateUserStatus(Long userId, String nextStatus, boolean force) {
+        if (userId == null || nextStatus == null) {
+            return;
+        }
+
+        userRepository.findById(userId).ifPresent(user -> {
+            String currentStatus = user.getStatus();
+            String resolvedStatus = nextStatus;
+
+            if (!force && "online".equals(nextStatus) && isPresenceStatus(currentStatus)) {
+                resolvedStatus = currentStatus;
+            }
+
+            if (!resolvedStatus.equals(currentStatus)) {
+                user.setStatus(resolvedStatus);
+                userRepository.save(user);
+            }
+
+            broadcastUserStatus(user);
+        });
+    }
+
+    private boolean isPresenceStatus(String status) {
+        return "online".equals(status) || "away".equals(status) || "dnd".equals(status);
+    }
+
+    private String normalizeStatus(String status) {
+        if (status == null) {
+            return "online";
+        }
+
+        String normalizedStatus = status.trim().replace("\"", "");
+        if (normalizedStatus.contains(":")) {
+            normalizedStatus = normalizedStatus
+                    .replace("{", "")
+                    .replace("}", "")
+                    .replace("status", "")
+                    .replace(":", "")
+                    .trim();
+        }
+
+        return switch (normalizedStatus) {
+            case "away", "dnd", "offline" -> normalizedStatus;
+            default -> "online";
+        };
+    }
+
+    private void broadcastUserStatus(User user) {
+        WebSocketMessage message = new WebSocketMessage();
+        message.setAuthor(toWebSocketUserInfo(user));
+        message.setType(WebSocketMessage.WebSocketMessageType.ONLINE_STATUS);
+        messagingTemplate.convertAndSend("/topic/users/status", message);
     }
 
     private WebSocketMessage.UserInfo toWebSocketUserInfo(User user) {

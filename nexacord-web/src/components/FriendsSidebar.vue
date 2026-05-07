@@ -9,15 +9,15 @@
 
     <div class="dm-search">
       <Search :size="17" aria-hidden="true" />
-      <input type="text" placeholder="寻找或开始新的对话" aria-label="寻找或开始新的对话" />
+      <input v-model="searchQuery" type="text" placeholder="寻找或开始新的对话" aria-label="寻找或开始新的对话" />
     </div>
 
     <nav class="friends-nav" aria-label="好友导航">
-      <button class="nav-item active" type="button">
+      <button class="nav-item" :class="{ active: activeHomeTarget === 'friends' && route.name === 'Friends' }" type="button" @click="openFriends">
         <Users :size="20" aria-hidden="true" />
         <span>好友</span>
       </button>
-      <button class="nav-item" type="button" @click="focusAddFriend">
+      <button class="nav-item" :class="{ active: activeHomeTarget === 'pending' && route.name === 'Friends' }" type="button" @click="focusPendingRequests">
         <Inbox :size="20" aria-hidden="true" />
         <span>好友请求</span>
       </button>
@@ -25,7 +25,25 @@
 
     <div class="dm-list">
       <span class="dm-title">直接消息</span>
-      <p>私信会话会在好友系统继续完善后显示在这里。</p>
+      <p v-if="isLoading">正在加载私信……</p>
+      <p v-else-if="filteredConversations.length === 0">还没有私信会话。</p>
+      <button
+        v-for="conversation in filteredConversations"
+        :key="conversation.id"
+        class="dm-item"
+        :class="{ active: currentConversationId === conversation.id }"
+        type="button"
+        @click="openConversation(conversation.id)"
+      >
+        <span class="dm-avatar">
+          <img :src="conversation.otherUser.avatarUrl || defaultAvatarUrl" :alt="displayNameOf(conversation.otherUser)" />
+          <i :class="['status-dot', conversation.otherUser.status || 'offline']"></i>
+        </span>
+        <span class="dm-copy">
+          <strong>{{ displayNameOf(conversation.otherUser) }}</strong>
+          <small>{{ conversation.lastMessage?.content || statusLabel(conversation.otherUser.status) }}</small>
+        </span>
+      </button>
     </div>
 
     <UserControlPanel show-logout @logout="logout" />
@@ -33,18 +51,89 @@
 </template>
 
 <script setup lang="ts">
-import { useRouter } from 'vue-router';
+import { computed, onMounted, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { storeToRefs } from 'pinia';
 import { Inbox, Search, UserPlus, Users } from 'lucide-vue-next';
 import UserControlPanel from './UserControlPanel.vue';
+import { useDirectMessageStore } from '../stores/directMessageStore';
 import { useUserStore } from '../stores/userStore';
 import { useVoiceStore } from '../stores/voiceStore';
+import type { User } from '../types';
+import { displayUserLabel } from '../utils/userDisplay';
 
+const route = useRoute();
 const router = useRouter();
 const userStore = useUserStore();
 const voiceStore = useVoiceStore();
+const directMessageStore = useDirectMessageStore();
+const { conversations, currentConversationId, isLoading } = storeToRefs(directMessageStore);
+
+const defaultAvatarUrl = '/logo.png';
+const searchQuery = ref('');
+const activeHomeTarget = ref<'friends' | 'pending'>('friends');
 
 const focusAddFriend = () => {
-  window.dispatchEvent(new CustomEvent('nexacord:focus-add-friend'));
+  activeHomeTarget.value = 'friends';
+  if (route.name !== 'Friends') {
+    router.push('/');
+  }
+  window.setTimeout(() => {
+    window.dispatchEvent(new CustomEvent('nexacord:focus-friend-tab', { detail: { tab: 'add' } }));
+  }, 30);
+};
+
+const focusPendingRequests = () => {
+  activeHomeTarget.value = 'pending';
+  if (route.name !== 'Friends') {
+    router.push('/');
+  }
+  window.setTimeout(() => {
+    window.dispatchEvent(new CustomEvent('nexacord:focus-friend-tab', { detail: { tab: 'pending' } }));
+  }, 30);
+};
+
+const openFriends = () => {
+  activeHomeTarget.value = 'friends';
+  if (route.name !== 'Friends') {
+    router.push('/');
+  }
+  window.setTimeout(() => {
+    window.dispatchEvent(new CustomEvent('nexacord:focus-friend-tab', { detail: { tab: 'online' } }));
+  }, 30);
+};
+
+const filteredConversations = computed(() => {
+  const query = searchQuery.value.trim().toLowerCase();
+  if (!query) {
+    return conversations.value;
+  }
+
+  return conversations.value.filter((conversation) => {
+    const user = conversation.otherUser;
+    return (
+      user.username.toLowerCase().includes(query) ||
+      (user.displayName || '').toLowerCase().includes(query)
+    );
+  });
+});
+
+const displayNameOf = (user: Pick<User, 'username' | 'displayName'>) => displayUserLabel(user);
+
+const statusLabel = (status: User['status']) => {
+  const labels = {
+    online: '在线',
+    offline: '离线',
+    away: '闲置',
+    dnd: '请勿打扰',
+  } as const;
+
+  return labels[status] || '离线';
+};
+
+const openConversation = (conversationId: number) => {
+  activeHomeTarget.value = 'friends';
+  router.push(`/direct/${conversationId}`);
 };
 
 const logout = () => {
@@ -52,6 +141,11 @@ const logout = () => {
   userStore.logout();
   router.push('/login');
 };
+
+onMounted(() => {
+  directMessageStore.initializeRealtime();
+  void directMessageStore.fetchConversations();
+});
 
 </script>
 
@@ -146,6 +240,10 @@ const logout = () => {
 .dm-list {
   min-height: 0;
   padding: 12px 16px;
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  overflow-y: auto;
   color: var(--discord-text-faint);
   font-size: 13px;
 }
@@ -162,6 +260,88 @@ const logout = () => {
 .dm-list p {
   margin: 0;
   line-height: 1.5;
+}
+
+.dm-item {
+  min-width: 0;
+  min-height: 44px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 6px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--discord-text-muted);
+  text-align: left;
+}
+
+.dm-item:hover,
+.dm-item.active {
+  background: var(--discord-channel-hover);
+  color: var(--discord-text);
+}
+
+.dm-avatar {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--discord-brand);
+}
+
+.dm-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+.status-dot {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 11px;
+  height: 11px;
+  border: 3px solid var(--discord-surface);
+  border-radius: 50%;
+  background: var(--discord-green);
+}
+
+.status-dot.offline {
+  background: #80848e;
+}
+
+.status-dot.away {
+  background: #f0b232;
+}
+
+.status-dot.dnd {
+  background: var(--discord-red);
+}
+
+.dm-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.dm-copy strong,
+.dm-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dm-copy strong {
+  font-size: 14px;
+}
+
+.dm-copy small {
+  color: var(--discord-text-faint);
+  font-size: 12px;
 }
 
 .user-panel {

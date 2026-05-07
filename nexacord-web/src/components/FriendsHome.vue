@@ -56,7 +56,7 @@
               <article v-for="request in incomingRequests" :key="request.id" class="friend-row">
                 <div class="avatar">
                   <img :src="avatarUrl(request.user)" :alt="usernameTag(request.user.username)" />
-                  <i :class="['status-dot', request.user.status || 'online']"></i>
+                  <i :class="['status-dot', request.user.status || 'offline']"></i>
                 </div>
                 <div class="friend-copy">
                   <strong>{{ usernameTag(request.user.username) }}</strong>
@@ -79,7 +79,7 @@
               <article v-for="request in outgoingRequests" :key="request.id" class="friend-row">
                 <div class="avatar">
                   <img :src="avatarUrl(request.user)" :alt="usernameTag(request.user.username)" />
-                  <i :class="['status-dot', request.user.status || 'online']"></i>
+                  <i :class="['status-dot', request.user.status || 'offline']"></i>
                 </div>
                 <div class="friend-copy">
                   <strong>{{ usernameTag(request.user.username) }}</strong>
@@ -116,14 +116,14 @@
           <article v-for="friendship in filteredVisibleFriends" v-else :key="friendship.id" class="friend-row">
             <div class="avatar">
               <img :src="avatarUrl(friendship.user)" :alt="usernameTag(friendship.user.username)" />
-              <i :class="['status-dot', friendship.user.status || 'online']"></i>
+              <i :class="['status-dot', friendship.user.status || 'offline']"></i>
             </div>
             <div class="friend-copy">
               <strong>{{ usernameTag(friendship.user.username) }}</strong>
               <span>{{ statusLabel(friendship.user.status) }}</span>
             </div>
             <div class="row-actions">
-              <button class="circle-action" type="button" title="发送消息" disabled>
+              <button class="circle-action" type="button" title="发送消息" @click="openDirectConversation(friendship.user)">
                 <MessageCircle :size="18" aria-hidden="true" />
               </button>
               <button class="circle-action danger" type="button" title="移除好友" @click="removeFriend(friendship.id)">
@@ -148,6 +148,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import {
   Check,
   Gamepad2,
@@ -160,6 +161,9 @@ import {
   X,
 } from 'lucide-vue-next';
 import friendService from '../services/friendService';
+import websocketService from '../services/websocketService';
+import { useDirectMessageStore } from '../stores/directMessageStore';
+import { useUserStore } from '../stores/userStore';
 import type { Friendship, User } from '../types';
 import { usernameTag } from '../utils/userDisplay';
 
@@ -172,6 +176,9 @@ const tabs: Array<{ label: string; value: FriendTab }> = [
   { label: '添加好友', value: 'add' },
 ];
 
+const router = useRouter();
+const directMessageStore = useDirectMessageStore();
+const userStore = useUserStore();
 const friends = ref<Friendship[]>([]);
 const incomingRequests = ref<Friendship[]>([]);
 const outgoingRequests = ref<Friendship[]>([]);
@@ -184,7 +191,7 @@ const isSubmittingFriend = ref(false);
 const addFriendForm = ref<HTMLFormElement | null>(null);
 
 const onlineFriends = computed(() =>
-  friends.value.filter((friendship) => friendship.user.status === 'online')
+  friends.value.filter((friendship) => friendship.user.status && friendship.user.status !== 'offline')
 );
 
 const visibleFriends = computed(() => (activeTab.value === 'online' ? onlineFriends.value : friends.value));
@@ -213,12 +220,12 @@ const avatarUrl = (user: User) => user.avatarUrl || '/logo.png';
 const statusLabel = (status: User['status']) => {
   const labels = {
     online: '在线',
-    offline: '隐身',
+    offline: '离线',
     away: '闲置',
     dnd: '请勿打扰',
   } as const;
 
-  return labels[status] || '在线';
+  return labels[status] || '离线';
 };
 
 const loadFriends = async () => {
@@ -278,20 +285,74 @@ const removeFriend = async (friendshipId: number) => {
   await loadFriends();
 };
 
-const focusAddFriend = () => {
-  activeTab.value = 'add';
-  window.setTimeout(() => {
-    addFriendForm.value?.querySelector('input')?.focus();
-  }, 80);
+const openDirectConversation = async (user: User) => {
+  const conversation = await directMessageStore.openConversationWithUser(user);
+  if (conversation) {
+    router.push(`/direct/${conversation.id}`);
+  }
+};
+
+const focusFriendTab = (event: Event) => {
+  const detail = (event as CustomEvent<{ tab?: FriendTab }>).detail;
+  activeTab.value = detail?.tab || 'add';
+  if (activeTab.value === 'add') {
+    window.setTimeout(() => {
+      addFriendForm.value?.querySelector('input')?.focus();
+    }, 80);
+  }
+};
+
+const applyUserStatusUpdate = (payload: unknown) => {
+  const author = (payload as { author?: Pick<User, 'id' | 'status'> })?.author;
+  if (!author?.id || !author.status) {
+    return;
+  }
+
+  const updateFriendshipUser = (friendship: Friendship) =>
+    friendship.user.id === author.id
+      ? { ...friendship, user: { ...friendship.user, status: author.status as User['status'] } }
+      : friendship;
+
+  friends.value = friends.value.map(updateFriendshipUser);
+  incomingRequests.value = incomingRequests.value.map(updateFriendshipUser);
+  outgoingRequests.value = outgoingRequests.value.map(updateFriendshipUser);
+};
+
+let unsubscribeFriendRealtime: (() => void) | null = null;
+
+const subscribeFriendRealtime = () => {
+  const userId = userStore.currentUser?.id;
+  if (!userId || !websocketService.isConnected() || unsubscribeFriendRealtime) {
+    return;
+  }
+
+  unsubscribeFriendRealtime = websocketService.subscribe(`/topic/friends/user/${userId}`, () => {
+    void loadFriends();
+  });
+};
+
+const handleRealtimeConnect = () => {
+  subscribeFriendRealtime();
+};
+
+const handleUserStatusRealtime = (_event: unknown, payload: unknown) => {
+  applyUserStatusUpdate(payload);
 };
 
 onMounted(async () => {
   await loadFriends();
-  window.addEventListener('nexacord:focus-add-friend', focusAddFriend);
+  subscribeFriendRealtime();
+  websocketService.on('connect', handleRealtimeConnect);
+  websocketService.on('user:status:update', handleUserStatusRealtime);
+  window.addEventListener('nexacord:focus-friend-tab', focusFriendTab);
 });
 
 onBeforeUnmount(() => {
-  window.removeEventListener('nexacord:focus-add-friend', focusAddFriend);
+  unsubscribeFriendRealtime?.();
+  unsubscribeFriendRealtime = null;
+  websocketService.off('connect', handleRealtimeConnect);
+  websocketService.off('user:status:update', handleUserStatusRealtime);
+  window.removeEventListener('nexacord:focus-friend-tab', focusFriendTab);
 });
 </script>
 

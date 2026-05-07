@@ -19,6 +19,12 @@ const routes: RouteRecordRaw[] = [
         meta: { requiresAuth: true },
       },
       {
+        path: '/direct/:conversationId',
+        name: 'DirectConversation',
+        component: () => import('../components/DirectMessageView.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
         path: '/servers/:serverId',
         name: 'Server',
         component: EmptyWorkspace,

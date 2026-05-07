@@ -18,7 +18,7 @@
       <div class="popover-body">
         <div class="popover-avatar">
           <img :src="profileUser.avatarUrl || defaultAvatarUrl" :alt="displayName" />
-          <i :class="['status-dot', profileUser.status || 'online']"></i>
+          <i :class="['status-dot', profileUser.status || 'offline']"></i>
         </div>
 
         <div class="identity-block">
@@ -40,11 +40,11 @@
         </button>
 
         <div v-else class="profile-actions">
-          <button type="button">
+          <button type="button" @click="openDirectMessage">
             <MessageCircle :size="14" aria-hidden="true" />
             <span>消息</span>
           </button>
-          <button type="button">
+          <button type="button" @click="startDirectCall">
             <PhoneCall :size="14" aria-hidden="true" />
             <span>呼叫</span>
           </button>
@@ -56,7 +56,11 @@
         </button>
 
         <label v-if="!isSelf" class="dm-input">
-          <input :placeholder="`私信 ${usernameTag(profileUser.username)}`" />
+          <input
+            v-model="quickMessage"
+            :placeholder="`私信 ${usernameTag(profileUser.username)}`"
+            @keydown.enter.prevent="sendQuickMessage"
+          />
           <Smile :size="15" aria-hidden="true" />
         </label>
       </div>
@@ -66,6 +70,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import {
   MessageCircle,
@@ -77,8 +82,10 @@ import {
   Smile,
   UserCheck,
 } from 'lucide-vue-next';
+import { useDirectMessageStore } from '../stores/directMessageStore';
 import { useServerStore } from '../stores/serverStore';
 import { useUserStore } from '../stores/userStore';
+import { useVoiceStore } from '../stores/voiceStore';
 import type { MemberRole, User } from '../types';
 import { displayUserLabel, usernameTag } from '../utils/userDisplay';
 
@@ -100,6 +107,9 @@ type OpenUserPopoverDetail = {
 
 const userStore = useUserStore();
 const serverStore = useServerStore();
+const directMessageStore = useDirectMessageStore();
+const voiceStore = useVoiceStore();
+const router = useRouter();
 const { currentUser } = storeToRefs(userStore);
 const { currentServer } = storeToRefs(serverStore);
 
@@ -108,6 +118,7 @@ const isOpen = ref(false);
 const profileUser = ref<PopoverUser | null>(null);
 const role = ref<MemberRole | null>(null);
 const serverName = ref('');
+const quickMessage = ref('');
 const position = reactive({
   left: 0,
   top: 0,
@@ -179,6 +190,7 @@ const openPopover = (event: Event) => {
   profileUser.value = enrichedUser;
   role.value = detail.role || null;
   serverName.value = detail.serverName || currentServer.value?.name || '';
+  quickMessage.value = '';
   clampPosition(detail.x, detail.y);
   isOpen.value = true;
 };
@@ -190,6 +202,46 @@ const closePopover = () => {
 const openProfileEditor = () => {
   closePopover();
   window.dispatchEvent(new CustomEvent('nexacord:open-profile'));
+};
+
+const openDirectMessage = async () => {
+  if (!profileUser.value) {
+    return;
+  }
+
+  const conversation = await directMessageStore.openConversationWithUser(profileUser.value);
+  if (conversation) {
+    closePopover();
+    router.push(`/direct/${conversation.id}`);
+  }
+};
+
+const sendQuickMessage = async () => {
+  const content = quickMessage.value.trim();
+  if (!profileUser.value || !content) {
+    return;
+  }
+
+  const conversation = await directMessageStore.openConversationWithUser(profileUser.value);
+  if (!conversation) {
+    return;
+  }
+
+  const success = await directMessageStore.sendMessage(conversation.id, content);
+  if (success) {
+    quickMessage.value = '';
+    closePopover();
+    router.push(`/direct/${conversation.id}`);
+  }
+};
+
+const startDirectCall = () => {
+  if (!profileUser.value) {
+    return;
+  }
+
+  voiceStore.startDirectCall(profileUser.value);
+  closePopover();
 };
 
 const handleKeydown = (event: KeyboardEvent) => {

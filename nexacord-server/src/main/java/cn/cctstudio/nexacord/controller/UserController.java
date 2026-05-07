@@ -12,6 +12,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -25,6 +26,7 @@ public class UserController {
     private final UserRepository userRepository;
     private final EmailVerificationService emailVerificationService;
     private final PasswordEncoder passwordEncoder;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @GetMapping("/me")
     public ResponseEntity<UserResponse> getCurrentUser(@AuthenticationPrincipal User currentUser) {
@@ -116,11 +118,17 @@ public class UserController {
             user.setBio(normalizeNullable(request.getBio()));
         }
 
+        boolean statusChanged = hasText(request.getStatus()) && !request.getStatus().trim().equals(user.getStatus());
         if (hasText(request.getStatus())) {
             user.setStatus(request.getStatus().trim());
         }
 
-        return new ResponseEntity<>(toUserResponse(userRepository.save(user)), HttpStatus.OK);
+        User savedUser = userRepository.save(user);
+        if (statusChanged) {
+            broadcastUserStatus(savedUser);
+        }
+
+        return new ResponseEntity<>(toUserResponse(savedUser), HttpStatus.OK);
     }
 
     @GetMapping("/search")
@@ -186,5 +194,20 @@ public class UserController {
         }
 
         return normalizedValue;
+    }
+
+    private void broadcastUserStatus(User user) {
+        cn.cctstudio.nexacord.dto.websocket.WebSocketMessage message =
+                new cn.cctstudio.nexacord.dto.websocket.WebSocketMessage();
+        cn.cctstudio.nexacord.dto.websocket.WebSocketMessage.UserInfo userInfo =
+                new cn.cctstudio.nexacord.dto.websocket.WebSocketMessage.UserInfo();
+        userInfo.setId(user.getId());
+        userInfo.setUsername(user.getUsername());
+        userInfo.setDisplayName(user.getDisplayName());
+        userInfo.setAvatarUrl(user.getAvatarUrl());
+        userInfo.setStatus(user.getStatus());
+        message.setAuthor(userInfo);
+        message.setType(cn.cctstudio.nexacord.dto.websocket.WebSocketMessage.WebSocketMessageType.ONLINE_STATUS);
+        messagingTemplate.convertAndSend("/topic/users/status", message);
     }
 }

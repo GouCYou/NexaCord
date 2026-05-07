@@ -12,10 +12,12 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/friends")
@@ -23,6 +25,7 @@ import java.util.List;
 public class FriendController {
     private final FriendshipRepository friendshipRepository;
     private final UserRepository userRepository;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @GetMapping
     public ResponseEntity<List<FriendshipResponse>> getFriends(@AuthenticationPrincipal User currentUser) {
@@ -84,8 +87,11 @@ public class FriendController {
                 .status(Friendship.Status.PENDING)
                 .build();
 
+        Friendship savedFriendship = friendshipRepository.save(friendship);
+        publishFriendEvent(savedFriendship, "REQUEST_CREATED");
+
         return new ResponseEntity<>(
-                FriendshipResponse.from(friendshipRepository.save(friendship), currentUser),
+                FriendshipResponse.from(savedFriendship, currentUser),
                 HttpStatus.CREATED
         );
     }
@@ -101,8 +107,11 @@ public class FriendController {
         }
 
         friendship.setStatus(Friendship.Status.ACCEPTED);
+        Friendship savedFriendship = friendshipRepository.save(friendship);
+        publishFriendEvent(savedFriendship, "REQUEST_ACCEPTED");
+
         return new ResponseEntity<>(
-                FriendshipResponse.from(friendshipRepository.save(friendship), currentUser),
+                FriendshipResponse.from(savedFriendship, currentUser),
                 HttpStatus.OK
         );
     }
@@ -113,6 +122,7 @@ public class FriendController {
             @AuthenticationPrincipal User currentUser
     ) {
         Friendship friendship = findFriendshipForCurrentUser(friendshipId, currentUser);
+        publishFriendEvent(friendship, "FRIENDSHIP_REMOVED");
         friendshipRepository.delete(friendship);
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
@@ -129,5 +139,20 @@ public class FriendController {
         }
 
         return friendship;
+    }
+
+    private void publishFriendEvent(Friendship friendship, String type) {
+        publishFriendEventForUser(friendship, friendship.getRequester(), type);
+        publishFriendEventForUser(friendship, friendship.getAddressee(), type);
+    }
+
+    private void publishFriendEventForUser(Friendship friendship, User user, String type) {
+        messagingTemplate.convertAndSend(
+                "/topic/friends/user/" + user.getId(),
+                Map.of(
+                        "type", type,
+                        "friendship", FriendshipResponse.from(friendship, user)
+                )
+        );
     }
 }
