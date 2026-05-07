@@ -12,7 +12,7 @@
         <aside class="profile-preview">
           <div class="profile-banner" :style="profileBannerStyle"></div>
           <button class="avatar-upload" type="button" title="上传头像" @click="avatarInput?.click()">
-            <img :src="profileForm.avatarUrl || defaultAvatarUrl" alt="头像预览" />
+            <img :src="avatarPreviewUrl || profileForm.avatarUrl || defaultAvatarUrl" alt="头像预览" />
           </button>
           <strong>{{ previewName }}</strong>
           <small>@{{ profileForm.username || currentUser?.username }}</small>
@@ -60,7 +60,7 @@
                 <ImagePlus :size="18" aria-hidden="true" />
                 <span>上传横幅图片</span>
               </button>
-              <button v-if="profileForm.bannerUrl" class="banner-button" type="button" @click="profileForm.bannerUrl = null">
+              <button v-if="bannerPreviewUrl || profileForm.bannerUrl" class="banner-button" type="button" @click="clearBannerImage">
                 清除图片
               </button>
             </div>
@@ -168,6 +168,10 @@ const emailModalError = ref('');
 const emailModalNotice = ref('');
 const avatarInput = ref<HTMLInputElement | null>(null);
 const bannerInput = ref<HTMLInputElement | null>(null);
+const pendingAvatarFile = ref<File | null>(null);
+const pendingBannerFile = ref<File | null>(null);
+const avatarPreviewUrl = ref('');
+const bannerPreviewUrl = ref('');
 const showEmailChangeModal = ref(false);
 const emailStep = ref<'verify' | 'new-email'>('verify');
 const defaultAvatarUrl = '/logo.png';
@@ -197,6 +201,10 @@ const profileBannerStyle = computed(() => {
 
   if (profileForm.bannerUrl) {
     style.backgroundImage = `url(${profileForm.bannerUrl})`;
+  }
+
+  if (bannerPreviewUrl.value) {
+    style.backgroundImage = `url(${bannerPreviewUrl.value})`;
   }
 
   return style;
@@ -241,6 +249,7 @@ const closeModal = () => {
   isOpen.value = false;
   profileError.value = '';
   profileNotice.value = '';
+  clearPendingImages();
   closeEmailChangeModal();
 };
 
@@ -249,29 +258,92 @@ const saveProfile = async () => {
   profileNotice.value = '';
 
   isSavingProfile.value = true;
+  const uploadedUrls: string[] = [];
 
   try {
+    let nextAvatarUrl = profileForm.avatarUrl;
+    let nextBannerUrl = profileForm.bannerUrl;
+
+    if (pendingAvatarFile.value) {
+      profileNotice.value = '正在上传头像……';
+      nextAvatarUrl = await fileService.uploadFile(pendingAvatarFile.value);
+      uploadedUrls.push(nextAvatarUrl);
+    }
+
+    if (pendingBannerFile.value) {
+      profileNotice.value = '正在上传横幅……';
+      nextBannerUrl = await fileService.uploadFile(pendingBannerFile.value);
+      uploadedUrls.push(nextBannerUrl);
+    }
+
     const success = await userStore.updateProfile({
       displayName: profileForm.displayName.trim(),
-      avatarUrl: profileForm.avatarUrl,
-      bannerUrl: profileForm.bannerUrl,
+      avatarUrl: nextAvatarUrl,
+      bannerUrl: nextBannerUrl,
       bannerColor: profileForm.bannerColor,
       bio: profileForm.bio.trim(),
     });
 
     if (!success) {
+      await cleanupUploadedUrls(uploadedUrls);
       profileError.value = userStore.error || '保存个人资料失败。';
       return;
     }
 
+    clearPendingImages();
     closeModal();
+  } catch (error: any) {
+    await cleanupUploadedUrls(uploadedUrls);
+    profileError.value =
+      error.response?.data?.error ||
+      error.response?.data?.message ||
+      '上传图片或保存个人资料失败。';
   } finally {
+    profileNotice.value = '';
     isSavingProfile.value = false;
   }
 };
 
 const setBannerColor = (color: string) => {
   profileForm.bannerColor = color;
+};
+
+const cleanupUploadedUrls = async (urls: string[]) => {
+  await Promise.allSettled(urls.map((url) => fileService.deleteFile(url)));
+};
+
+const revokePreviewUrl = (url: string) => {
+  if (url) {
+    URL.revokeObjectURL(url);
+  }
+};
+
+const setAvatarPreview = (file: File) => {
+  revokePreviewUrl(avatarPreviewUrl.value);
+  pendingAvatarFile.value = file;
+  avatarPreviewUrl.value = URL.createObjectURL(file);
+};
+
+const setBannerPreview = (file: File) => {
+  revokePreviewUrl(bannerPreviewUrl.value);
+  pendingBannerFile.value = file;
+  bannerPreviewUrl.value = URL.createObjectURL(file);
+};
+
+const clearPendingImages = () => {
+  revokePreviewUrl(avatarPreviewUrl.value);
+  revokePreviewUrl(bannerPreviewUrl.value);
+  pendingAvatarFile.value = null;
+  pendingBannerFile.value = null;
+  avatarPreviewUrl.value = '';
+  bannerPreviewUrl.value = '';
+};
+
+const clearBannerImage = () => {
+  revokePreviewUrl(bannerPreviewUrl.value);
+  pendingBannerFile.value = null;
+  bannerPreviewUrl.value = '';
+  profileForm.bannerUrl = null;
 };
 
 const resetEmailFlow = () => {
@@ -387,13 +459,19 @@ const uploadProfileImage = async (event: Event, field: 'avatarUrl' | 'bannerUrl'
   profileError.value = '';
   profileNotice.value = '';
   try {
-    const uploadFile = field === 'avatarUrl' ? await createSquareAvatarFile(file) : file;
-    profileForm[field] = await fileService.uploadFile(uploadFile);
+    if (field === 'avatarUrl') {
+      setAvatarPreview(await createSquareAvatarFile(file));
+      profileNotice.value = '头像已预览，保存后才会上传。';
+      return;
+    }
+
+    setBannerPreview(file);
+    profileNotice.value = '横幅已预览，保存后才会上传。';
   } catch (error: any) {
     profileError.value =
       error.response?.data?.error ||
       error.response?.data?.message ||
-      '上传图片失败。';
+      '读取图片失败。';
   } finally {
     input.value = '';
   }
@@ -436,6 +514,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  clearPendingImages();
   window.removeEventListener('nexacord:open-profile', openModal);
 });
 
