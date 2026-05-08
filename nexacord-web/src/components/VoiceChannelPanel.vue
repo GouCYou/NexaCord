@@ -46,17 +46,6 @@
       <span>{{ isCurrentVoiceChannel ? selfVoiceStatus : '你可以先加入这个语音频道' }}</span>
     </div>
 
-    <div v-if="isCurrentVoiceChannel" class="voice-mixer">
-      <label>
-        <span>麦克风 {{ inputVolume }}%</span>
-        <input class="volume-range" type="range" min="0" max="200" :value="inputVolume" @input="setInputVolumeFromEvent" />
-      </label>
-      <label>
-        <span>扬声器 {{ outputVolume }}%</span>
-        <input class="volume-range" type="range" min="0" max="200" :value="outputVolume" @input="setOutputVolumeFromEvent" />
-      </label>
-    </div>
-
     <div class="voice-grid">
       <article
         v-for="participant in displayedParticipants"
@@ -66,22 +55,37 @@
         :style="voiceLevelStyle(participant.id)"
         @click="openUserPopover(participant, $event)"
       >
+        <button
+          v-if="isCurrentVoiceChannel && participant.id !== currentUser?.id"
+          class="voice-volume-button"
+          type="button"
+          title="调节这个成员的音量"
+          @click.stop="toggleUserVolumeMenu(participant.id)"
+        >
+          <Volume2 :size="17" aria-hidden="true" />
+        </button>
+        <div
+          v-if="volumeMenuUserId === participant.id"
+          class="user-volume-popover"
+          @click.stop
+        >
+          <label>
+            <span>{{ displayNameOf(participant) }} {{ getUserVolume(participant.id) }}%</span>
+            <input
+              type="range"
+              class="volume-range"
+              min="0"
+              max="200"
+              :value="getUserVolume(participant.id)"
+              @input="setUserVolumeFromEvent(participant.id, $event)"
+            />
+          </label>
+        </div>
         <div class="voice-avatar">
           <AvatarImage :src="participant.avatarUrl || defaultAvatarUrl" :alt="displayNameOf(participant)" />
         </div>
         <strong>{{ displayNameOf(participant) }}</strong>
         <span>{{ participantVoiceStatus(participant) }}</span>
-        <label v-if="isCurrentVoiceChannel && participant.id !== currentUser?.id" class="user-volume" @click.stop>
-          <span>{{ getUserVolume(participant.id) }}%</span>
-          <input
-            type="range"
-            class="volume-range"
-            min="0"
-            max="200"
-            :value="getUserVolume(participant.id)"
-            @input="setUserVolumeFromEvent(participant.id, $event)"
-          />
-        </label>
       </article>
 
       <div v-if="displayedParticipants.length === 0" class="voice-empty">
@@ -94,7 +98,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { storeToRefs } from 'pinia';
 import { Headphones, Mic, MicOff, PhoneCall, PhoneOff, Users, Volume2, VolumeX } from 'lucide-vue-next';
 import { useServerStore } from '../stores/serverStore';
@@ -117,8 +121,6 @@ const {
   isConnecting,
   isMuted,
   isDeafened,
-  inputVolume,
-  outputVolume,
   voiceError,
   visibleParticipants,
   selfVoiceStatus,
@@ -134,11 +136,10 @@ const {
   leaveChannel,
   toggleMute,
   toggleDeafen,
-  setInputVolume,
-  setOutputVolume,
   setUserVolume,
 } = voiceStore;
 const defaultAvatarUrl = '/logo.png';
+const volumeMenuUserId = ref<number | null>(null);
 
 const isCurrentVoiceChannel = computed(() => activeChannelId.value === props.channelId);
 
@@ -179,6 +180,7 @@ const joinVoice = () => {
 };
 
 const openUserPopover = (user: VoiceUser, event: MouseEvent) => {
+  volumeMenuUserId.value = null;
   window.dispatchEvent(new CustomEvent('nexacord:open-user-popover', {
     detail: {
       user,
@@ -190,12 +192,8 @@ const openUserPopover = (user: VoiceUser, event: MouseEvent) => {
   }));
 };
 
-const setInputVolumeFromEvent = (event: Event) => {
-  setInputVolume(Number((event.target as HTMLInputElement).value));
-};
-
-const setOutputVolumeFromEvent = (event: Event) => {
-  setOutputVolume(Number((event.target as HTMLInputElement).value));
+const toggleUserVolumeMenu = (userId: number) => {
+  volumeMenuUserId.value = volumeMenuUserId.value === userId ? null : userId;
 };
 
 const setUserVolumeFromEvent = (userId: number, event: Event) => {
@@ -213,7 +211,7 @@ const disconnectVoice = () => {
   height: 100%;
   overflow-y: auto;
   display: grid;
-  grid-template-rows: auto auto auto 1fr;
+  grid-template-rows: auto auto 1fr;
   gap: 16px;
   padding: 22px;
   background: var(--discord-elevated);
@@ -331,31 +329,6 @@ button:disabled {
   gap: 7px;
 }
 
-.voice-mixer {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  padding: 14px;
-  border: 1px solid var(--discord-border);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--discord-surface) 78%, transparent);
-}
-
-.voice-mixer label,
-.user-volume {
-  display: grid;
-  gap: 6px;
-  color: var(--discord-text-faint);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.voice-mixer input,
-.user-volume input {
-  width: 100%;
-  accent-color: var(--discord-text-muted);
-}
-
 .voice-grid {
   min-height: 0;
   display: grid;
@@ -403,13 +376,58 @@ button:disabled {
   content: '正在说话';
   position: absolute;
   top: 10px;
-  right: 10px;
+  left: 10px;
   padding: 4px 7px;
   border-radius: 999px;
   background: rgba(59, 165, 93, 0.16);
   color: var(--discord-green);
   font-size: 11px;
   font-weight: 900;
+}
+
+.voice-volume-button {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--discord-bg) 88%, transparent);
+  color: var(--discord-text-muted);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+}
+
+.voice-volume-button:hover {
+  background: var(--discord-hover-strong);
+  color: var(--discord-text);
+}
+
+.user-volume-popover {
+  position: absolute;
+  top: 50px;
+  right: 10px;
+  z-index: 4;
+  width: min(220px, calc(100% - 20px));
+  padding: 12px;
+  border: 1px solid var(--discord-border);
+  border-radius: 12px;
+  background: var(--discord-elevated);
+  box-shadow: var(--discord-shadow);
+}
+
+.user-volume-popover label {
+  display: grid;
+  gap: 8px;
+  color: var(--discord-text-faint);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.user-volume-popover input {
+  width: 100%;
+  accent-color: var(--discord-text-muted);
 }
 
 .voice-avatar {
@@ -447,15 +465,6 @@ button:disabled {
 
 .voice-tile strong {
   font-size: 17px;
-}
-
-.user-volume {
-  width: min(200px, 82%);
-  margin-top: 6px;
-  padding: 8px 10px;
-  border: 1px solid var(--discord-border);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--discord-bg) 78%, transparent);
 }
 
 .voice-tile span {

@@ -1,24 +1,11 @@
 <template>
   <span class="avatar-image-frame">
-    <img
-      class="avatar-image-backdrop"
-      :src="resolvedSrc"
-      alt=""
-      aria-hidden="true"
-      draggable="false"
-    />
-    <img
-      class="avatar-image-foreground"
-      :src="resolvedSrc"
-      :alt="alt"
-      draggable="false"
-      @error="retryLoad"
-    />
+    <canvas ref="canvasRef" class="avatar-image-canvas" role="img" :aria-label="alt"></canvas>
   </span>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 
 const props = withDefaults(
   defineProps<{
@@ -33,6 +20,8 @@ const props = withDefaults(
 
 const retryCount = ref(0);
 const reloadToken = ref(0);
+const canvasRef = ref<HTMLCanvasElement | null>(null);
+let loadId = 0;
 const baseSrc = computed(() => props.src || '/logo.png');
 const resolvedSrc = computed(() => {
   if (!reloadToken.value) {
@@ -47,6 +36,75 @@ watch(baseSrc, () => {
   retryCount.value = 0;
   reloadToken.value = 0;
 });
+
+watch(
+  resolvedSrc,
+  () => {
+    void loadAvatar();
+  },
+  { immediate: true }
+);
+
+const loadAvatar = async () => {
+  const currentLoadId = ++loadId;
+  await nextTick();
+
+  const image = new Image();
+  image.decoding = 'async';
+  image.onload = () => {
+    if (currentLoadId !== loadId) {
+      return;
+    }
+
+    drawAvatar(image);
+  };
+  image.onerror = retryLoad;
+  image.src = resolvedSrc.value;
+};
+
+const drawAvatar = (image: HTMLImageElement) => {
+  const canvas = canvasRef.value;
+  if (!canvas || !image.naturalWidth || !image.naturalHeight) {
+    return;
+  }
+
+  const size = 192;
+  canvas.width = size;
+  canvas.height = size;
+
+  const context = canvas.getContext('2d');
+  if (!context) {
+    return;
+  }
+
+  context.clearRect(0, 0, size, size);
+  context.save();
+  context.beginPath();
+  context.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+  context.clip();
+  context.fillStyle = '#eef2f7';
+  context.fillRect(0, 0, size, size);
+
+  context.filter = 'blur(12px) saturate(1.12)';
+  drawCover(context, image, size, 1.8);
+  context.filter = 'none';
+  drawCover(context, image, size, 1.28);
+  context.restore();
+};
+
+const drawCover = (
+  context: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  size: number,
+  scaleMultiplier: number
+) => {
+  const imageScale = Math.max(size / image.naturalWidth, size / image.naturalHeight) * scaleMultiplier;
+  const width = image.naturalWidth * imageScale;
+  const height = image.naturalHeight * imageScale;
+  const x = (size - width) / 2;
+  const y = (size - height) / 2;
+  context.drawImage(image, x, y, width, height);
+};
 
 const retryLoad = () => {
   if (retryCount.value >= 3) {
@@ -73,22 +131,10 @@ const retryLoad = () => {
   background: var(--discord-avatar-bg);
 }
 
-.avatar-image-frame img {
-  position: absolute;
-  inset: 0;
+.avatar-image-canvas {
   width: 100%;
   height: 100%;
+  display: block;
   border-radius: inherit;
-  object-fit: cover;
-  user-select: none;
-}
-
-.avatar-image-backdrop {
-  transform: scale(1.32);
-  filter: blur(8px) saturate(1.1);
-}
-
-.avatar-image-foreground {
-  transform: scale(1.1);
 }
 </style>

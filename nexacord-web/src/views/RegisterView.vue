@@ -230,11 +230,12 @@ const handleRegister = async () => {
 
 <style scoped>
 .auth-shell {
-  min-height: 100dvh;
+  height: 100dvh;
+  min-height: 0;
   display: grid;
   place-items: center;
   padding: 20px;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .auth-card {
@@ -416,7 +417,7 @@ const handleRegister = async () => {
 
 .auth-card {
   width: min(1040px, calc(100vw - 24px));
-  height: min(720px, calc(100dvh - clamp(24px, 4.8dvh, 48px)));
+  height: min(680px, calc(100dvh - clamp(20px, 4dvh, 40px)));
   min-height: 0;
   max-height: none;
   grid-template-columns: minmax(360px, 0.96fr) minmax(360px, 0.9fr);
@@ -430,7 +431,7 @@ const handleRegister = async () => {
   position: relative;
   align-content: end;
   min-height: 0;
-  padding: clamp(28px, 5dvh, 48px);
+  padding: clamp(24px, 4.2dvh, 42px);
   color: #ffffff;
   background:
     linear-gradient(145deg, rgba(9, 14, 28, 0.94), rgba(25, 40, 76, 0.9) 58%, rgba(23, 93, 112, 0.88)),
@@ -478,7 +479,7 @@ const handleRegister = async () => {
 .brand-panel h1 {
   max-width: 500px;
   color: #ffffff;
-  font-size: clamp(34px, 5.8dvh, 60px);
+  font-size: clamp(32px, 5.2dvh, 56px);
   line-height: 1;
 }
 
@@ -491,8 +492,8 @@ const handleRegister = async () => {
   width: min(360px, 100%);
   display: grid;
   gap: 10px;
-  margin-top: 18px;
-  padding: 14px;
+  margin-top: 10px;
+  padding: 12px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.1);
@@ -516,8 +517,8 @@ const handleRegister = async () => {
 
 .form-panel {
   min-height: 0;
-  padding: 40px 48px;
-  overflow-y: auto;
+  padding: clamp(24px, 3.8dvh, 34px) clamp(28px, 4.2dvh, 42px);
+  overflow: hidden;
   background: rgba(248, 250, 252, 0.88);
   color: #111827;
 }
@@ -540,7 +541,7 @@ const handleRegister = async () => {
 }
 
 .form-body {
-  gap: 13px;
+  gap: 8px;
 }
 
 .field {
@@ -548,6 +549,8 @@ const handleRegister = async () => {
 }
 
 .field input {
+  min-height: 42px;
+  padding: 8px 14px;
   border-color: rgba(15, 23, 42, 0.1);
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.92);
@@ -555,6 +558,8 @@ const handleRegister = async () => {
 }
 
 .primary-button {
+  min-height: 42px;
+  padding: 8px 14px;
   border-radius: 14px;
   background: #2563eb;
   box-shadow: 0 12px 28px rgba(37, 99, 235, 0.22);
@@ -565,16 +570,14 @@ const handleRegister = async () => {
 }
 
 .secondary-button {
+  min-height: 42px;
   border-radius: 14px;
   background: #e2e8f0;
   color: #111827;
 }
 
 .form-footer {
-  position: sticky;
-  bottom: -40px;
-  padding-top: 8px;
-  background: linear-gradient(180deg, transparent, rgba(248, 250, 252, 0.96) 38%);
+  padding-top: 2px;
 }
 
 @media (max-width: 860px) {
@@ -585,19 +588,19 @@ const handleRegister = async () => {
   }
 
   .brand-panel {
-    min-height: 260px;
+    min-height: 220px;
     padding-bottom: 24px;
   }
 }
 
 @media (max-height: 760px) {
   .auth-card {
-    height: calc(100dvh - 24px);
+    height: calc(100dvh - 18px);
   }
 
   .brand-panel,
   .form-panel {
-    padding: 28px;
+    padding: 22px;
   }
 
   .brand-panel {
@@ -605,7 +608,7 @@ const handleRegister = async () => {
   }
 
   .brand-panel h1 {
-    font-size: clamp(30px, 5.2dvh, 44px);
+    font-size: clamp(28px, 4.8dvh, 42px);
   }
 
   .brand-panel p {
@@ -615,7 +618,7 @@ const handleRegister = async () => {
   .brand-preview {
     width: min(320px, 100%);
     margin-top: 4px;
-    padding: 12px;
+    padding: 10px;
   }
 }
 
@@ -640,7 +643,27 @@ const handleRegister = async () => {
   }
 
   .form-panel {
-    gap: 14px;
+    gap: 10px;
+  }
+
+  .form-header h2 {
+    font-size: 24px;
+  }
+
+  .field input,
+  .primary-button,
+  .secondary-button {
+    min-height: 38px;
+    padding-block: 7px;
+  }
+
+  .field span {
+    font-size: 11px;
+  }
+
+  .error-inline,
+  .hint-inline {
+    font-size: 12px;
   }
 }
 </style>
