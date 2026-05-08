@@ -52,7 +52,7 @@
     <div v-if="incomingCall" class="call-overlay">
       <section class="incoming-call-card" role="dialog" aria-live="assertive">
         <div class="incoming-call-avatar">
-          <img :src="incomingCall.caller.avatarUrl || defaultAvatarUrl" :alt="displayUserLabel(incomingCall.caller)" />
+          <AvatarImage :src="incomingCall.caller.avatarUrl || defaultAvatarUrl" :alt="displayUserLabel(incomingCall.caller)" />
         </div>
         <div class="incoming-call-copy">
           <span>好友来电</span>

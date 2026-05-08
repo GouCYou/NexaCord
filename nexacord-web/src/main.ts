@@ -1,7 +1,9 @@
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
+import 'element-plus/dist/index.css';
 import './style.css';
 import App from './App.vue';
+import AvatarImage from './components/AvatarImage.vue';
 import router from './router';
 import { useThemeStore } from './stores/themeStore';
 import { useUserStore } from './stores/userStore';
@@ -11,6 +13,7 @@ const pinia = createPinia();
 
 app.use(pinia);
 app.use(router);
+app.component('AvatarImage', AvatarImage);
 
 const userStore = useUserStore();
 const themeStore = useThemeStore();

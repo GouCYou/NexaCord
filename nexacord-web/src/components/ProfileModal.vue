@@ -12,7 +12,7 @@
         <aside class="profile-preview">
           <div class="profile-banner" :style="profileBannerStyle"></div>
           <button class="avatar-upload" type="button" title="上传头像" @click="avatarInput?.click()">
-            <img :src="avatarPreviewUrl || profileForm.avatarUrl || defaultAvatarUrl" alt="头像预览" />
+            <AvatarImage :src="avatarPreviewUrl || profileForm.avatarUrl || defaultAvatarUrl" alt="头像预览" />
           </button>
           <strong>{{ previewName }}</strong>
           <small>@{{ profileForm.username || currentUser?.username }}</small>

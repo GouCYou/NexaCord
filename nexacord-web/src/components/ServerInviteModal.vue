@@ -29,7 +29,7 @@
             class="friend-row"
           >
             <div class="friend-avatar">
-              <img :src="friendship.user.avatarUrl || defaultAvatarUrl" :alt="usernameTag(friendship.user.username)" />
+              <AvatarImage :src="friendship.user.avatarUrl || defaultAvatarUrl" :alt="usernameTag(friendship.user.username)" />
             </div>
             <div class="friend-copy">
               <strong>{{ usernameTag(friendship.user.username) }}</strong>

@@ -120,7 +120,7 @@
           <template v-else>
             <article v-for="member in members" :key="member.id" class="member-row">
               <div class="member-avatar">
-                <img :src="member.user.avatarUrl || defaultAvatarUrl" :alt="usernameTag(member.user.username)" />
+                <AvatarImage :src="member.user.avatarUrl || defaultAvatarUrl" :alt="usernameTag(member.user.username)" />
               </div>
               <div class="member-copy">
                 <strong>{{ usernameTag(member.user.username) }}</strong>

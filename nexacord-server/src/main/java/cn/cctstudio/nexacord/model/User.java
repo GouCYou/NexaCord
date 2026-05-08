@@ -50,6 +50,9 @@ public class User implements UserDetails {
     private String bannerColor;
     private String bio;
     private String status;
+    private String activeSessionId;
+    private String activeDeviceName;
+    private Instant activeSessionIssuedAt;
 
     @CreationTimestamp
     private Instant createdAt;

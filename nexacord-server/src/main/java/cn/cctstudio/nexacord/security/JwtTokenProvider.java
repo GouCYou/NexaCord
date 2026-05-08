@@ -43,15 +43,15 @@ public class JwtTokenProvider {
         this.key = Keys.hmacShaKeyFor(keyBytes);
     }
 
-    public String generateToken(String username) {
-        return buildToken(username, jwtExpirationMs, false);
+    public String generateToken(String username, String sessionId, String deviceName) {
+        return buildToken(username, sessionId, deviceName, jwtExpirationMs, false);
     }
 
-    public String generateRefreshToken(String username) {
-        return buildToken(username, jwtRefreshTokenExpirationMs, true);
+    public String generateRefreshToken(String username, String sessionId, String deviceName) {
+        return buildToken(username, sessionId, deviceName, jwtRefreshTokenExpirationMs, true);
     }
 
-    private String buildToken(String username, long ttlMs, boolean refresh) {
+    private String buildToken(String username, String sessionId, String deviceName, long ttlMs, boolean refresh) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + ttlMs);
 
@@ -61,6 +61,8 @@ public class JwtTokenProvider {
                 .expiration(expiryDate)
                 // 可选：加个类型，方便你区分 access/refresh
                 .claim("typ", refresh ? "refresh" : "access")
+                .claim("sid", sessionId)
+                .claim("device", deviceName)
                 .signWith(key, Jwts.SIG.HS512)
                 .compact();
     }
@@ -81,6 +83,18 @@ public class JwtTokenProvider {
 
     public Instant getExpirationDateFromToken(String token) {
         return parseClaims(token).getExpiration().toInstant();
+    }
+
+    public String getSessionIdFromToken(String token) {
+        return parseClaims(token).get("sid", String.class);
+    }
+
+    public String getDeviceNameFromToken(String token) {
+        return parseClaims(token).get("device", String.class);
+    }
+
+    public boolean isRefreshToken(String token) {
+        return "refresh".equals(parseClaims(token).get("typ", String.class));
     }
 
     private Claims parseClaims(String token) {

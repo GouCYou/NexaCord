@@ -86,6 +86,7 @@ export interface Attachment {
 export interface LoginRequest {
   usernameOrEmail: string;
   password: string;
+  deviceName?: string;
 }
 
 export interface RegisterRequest {
@@ -94,6 +95,7 @@ export interface RegisterRequest {
   email: string;
   password: string;
   verificationCode: string;
+  deviceName?: string;
 }
 
 export interface UserProfileUpdateRequest {

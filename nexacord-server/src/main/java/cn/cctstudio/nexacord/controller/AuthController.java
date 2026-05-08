@@ -48,12 +48,13 @@ public class AuthController {
 
     @PostMapping("/refresh")
     public ResponseEntity<AuthResponse> refreshToken(@RequestBody RefreshTokenRequest request) {
-        AuthResponse response = authService.refreshToken(request.getRefreshToken());
+        AuthResponse response = authService.refreshToken(request.getRefreshToken(), request.getDeviceName());
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
 
     public static class RefreshTokenRequest {
         private String refreshToken;
+        private String deviceName;
 
         public String getRefreshToken() {
             return refreshToken;
@@ -61,6 +62,14 @@ public class AuthController {
 
         public void setRefreshToken(String refreshToken) {
             this.refreshToken = refreshToken;
+        }
+
+        public String getDeviceName() {
+            return deviceName;
+        }
+
+        public void setDeviceName(String deviceName) {
+            this.deviceName = deviceName;
         }
     }
 }

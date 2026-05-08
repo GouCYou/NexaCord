@@ -30,6 +30,9 @@ CREATE TABLE users (
     banner_color VARCHAR(20),
     bio VARCHAR(500),
     status VARCHAR(100),
+    active_session_id VARCHAR(64),
+    active_device_name VARCHAR(120),
+    active_session_issued_at TIMESTAMP NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );

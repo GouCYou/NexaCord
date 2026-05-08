@@ -67,7 +67,7 @@
         @click="openUserPopover(participant, $event)"
       >
         <div class="voice-avatar">
-          <img :src="participant.avatarUrl || defaultAvatarUrl" :alt="displayNameOf(participant)" />
+          <AvatarImage :src="participant.avatarUrl || defaultAvatarUrl" :alt="displayNameOf(participant)" />
         </div>
         <strong>{{ displayNameOf(participant) }}</strong>
         <span>{{ participantVoiceStatus(participant) }}</span>

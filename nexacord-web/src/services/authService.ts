@@ -42,6 +42,10 @@ class AuthService {
     clearAuthSession();
   }
 
+  clearSession(preservePreference = false): void {
+    clearAuthSession(preservePreference);
+  }
+
   setCurrentUser(user: User): void {
     updateStoredUser(user);
   }

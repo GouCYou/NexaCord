@@ -50,6 +50,7 @@ public class SecurityConfig {
                             .forEach(corsConfiguration::addAllowedOriginPattern);
                     corsConfiguration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
                     corsConfiguration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
+                    corsConfiguration.setExposedHeaders(List.of("X-Nexacord-Auth-Reason", "X-Nexacord-Auth-Device"));
                     corsConfiguration.setAllowCredentials(true);
                     corsConfiguration.setMaxAge(3600L);
                     return corsConfiguration;

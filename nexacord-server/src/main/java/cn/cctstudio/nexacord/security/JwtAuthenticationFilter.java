@@ -14,6 +14,9 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 
 @Component
 @RequiredArgsConstructor
@@ -28,8 +31,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             if (StringUtils.hasText(jwt) && jwtTokenProvider.validateToken(jwt)) {
                 String username = jwtTokenProvider.getUsernameFromToken(jwt);
+                String sessionId = jwtTokenProvider.getSessionIdFromToken(jwt);
 
                 UserDetails userDetails = customUserDetailsService.loadUserByUsername(username);
+                if (userDetails instanceof cn.cctstudio.nexacord.model.User user && !isCurrentSession(user, sessionId)) {
+                    writeSessionReplacedResponse(response, user.getActiveDeviceName());
+                    return;
+                }
+
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
@@ -40,6 +49,26 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private boolean isCurrentSession(cn.cctstudio.nexacord.model.User user, String sessionId) {
+        return !StringUtils.hasText(user.getActiveSessionId()) || Objects.equals(user.getActiveSessionId(), sessionId);
+    }
+
+    private void writeSessionReplacedResponse(HttpServletResponse response, String deviceName) throws IOException {
+        String normalizedDeviceName = StringUtils.hasText(deviceName) ? deviceName : "另一台设备";
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.setContentType("application/json;charset=UTF-8");
+        response.setHeader("X-Nexacord-Auth-Reason", "SESSION_REPLACED");
+        response.setHeader("X-Nexacord-Auth-Device", URLEncoder.encode(normalizedDeviceName, StandardCharsets.UTF_8));
+        response.getWriter().write("""
+                {"error":"你的账号已在其他设备登录。","reason":"SESSION_REPLACED","deviceName":"%s"}
+                """.formatted(escapeJson(normalizedDeviceName)).trim());
+    }
+
+    private String escapeJson(String value) {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private String getJwtFromRequest(HttpServletRequest request) {

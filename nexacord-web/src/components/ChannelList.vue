@@ -112,6 +112,7 @@
                     :title="channel.topic || channel.name"
                     type="button"
                     @click="selectChannel(channel.id)"
+                    @dblclick="joinVoiceChannel(channel)"
                   >
                     <Volume2 class="channel-prefix" :size="18" aria-hidden="true" />
                     <span class="channel-label">{{ channel.name }}</span>
@@ -137,7 +138,7 @@
                     :style="voiceLevelStyle(participant.id)"
                   >
                     <button class="voice-member-avatar" type="button" @click.stop="openVoiceUserPopover(participant, $event)">
-                      <img :src="participant.avatarUrl || defaultAvatarUrl" :alt="displayNameOf(participant)" />
+                      <AvatarImage :src="participant.avatarUrl || defaultAvatarUrl" :alt="displayNameOf(participant)" />
                     </button>
                     <button class="voice-member-name" type="button" @click.stop="openVoiceUserPopover(participant, $event)">
                       {{ displayNameOf(participant) }}
@@ -306,6 +307,16 @@ const openInviteModal = () => {
 const openChannelInvite = (channelId: number) => {
   selectChannel(channelId);
   window.dispatchEvent(new CustomEvent('nexacord:open-invite'));
+};
+
+const joinVoiceChannel = (channel: Channel) => {
+  selectChannel(channel.id);
+  void voiceStore.joinChannel({
+    channelId: channel.id,
+    channelName: channel.name,
+    serverId: currentServerId.value,
+    serverName: currentServer.value?.name || channel.server?.name || '',
+  });
 };
 
 const openChannelSettings = (channel: Channel) => {

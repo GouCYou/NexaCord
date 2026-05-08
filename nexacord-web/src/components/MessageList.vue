@@ -60,7 +60,7 @@
           :class="{ own: message.author.id === currentUser?.id }"
         >
           <button class="avatar" type="button" @click.stop="openUserPopover(message.author, $event)">
-            <img :src="message.author.avatarUrl || defaultAvatarUrl" :alt="displayUserName(message.author)" />
+            <AvatarImage :src="message.author.avatarUrl || defaultAvatarUrl" :alt="displayUserName(message.author)" />
           </button>
 
           <div class="message-body">

@@ -55,7 +55,7 @@
               <p v-if="incomingRequests.length === 0" class="empty-copy">暂时没有新的好友请求。</p>
               <article v-for="request in incomingRequests" :key="request.id" class="friend-row">
                 <div class="avatar">
-                  <img :src="avatarUrl(request.user)" :alt="usernameTag(request.user.username)" />
+                  <AvatarImage :src="avatarUrl(request.user)" :alt="usernameTag(request.user.username)" />
                   <i :class="['status-dot', request.user.status || 'offline']"></i>
                 </div>
                 <div class="friend-copy">
@@ -78,7 +78,7 @@
               <p v-if="outgoingRequests.length === 0" class="empty-copy">没有等待对方确认的请求。</p>
               <article v-for="request in outgoingRequests" :key="request.id" class="friend-row">
                 <div class="avatar">
-                  <img :src="avatarUrl(request.user)" :alt="usernameTag(request.user.username)" />
+                  <AvatarImage :src="avatarUrl(request.user)" :alt="usernameTag(request.user.username)" />
                   <i :class="['status-dot', request.user.status || 'offline']"></i>
                 </div>
                 <div class="friend-copy">
@@ -115,7 +115,7 @@
 
           <article v-for="friendship in filteredVisibleFriends" v-else :key="friendship.id" class="friend-row">
             <div class="avatar">
-              <img :src="avatarUrl(friendship.user)" :alt="usernameTag(friendship.user.username)" />
+              <AvatarImage :src="avatarUrl(friendship.user)" :alt="usernameTag(friendship.user.username)" />
               <i :class="['status-dot', friendship.user.status || 'offline']"></i>
             </div>
             <div class="friend-copy">

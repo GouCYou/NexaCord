@@ -7,7 +7,7 @@
         <h2>在线 — {{ onlineMembers.length }}</h2>
         <button v-for="member in onlineMembers" :key="member.id" class="member-row" type="button" @click="openUserPopover(member, $event)">
           <div class="member-avatar">
-            <img :src="member.user.avatarUrl || defaultAvatarUrl" :alt="memberName(member)" />
+            <AvatarImage :src="member.user.avatarUrl || defaultAvatarUrl" :alt="memberName(member)" />
             <i :class="['status-dot', member.user.status || 'online']"></i>
           </div>
           <span>
@@ -21,7 +21,7 @@
         <h2>离线 — {{ offlineMembers.length }}</h2>
         <button v-for="member in offlineMembers" :key="member.id" class="member-row offline" type="button" @click="openUserPopover(member, $event)">
           <div class="member-avatar">
-            <img :src="member.user.avatarUrl || defaultAvatarUrl" :alt="memberName(member)" />
+            <AvatarImage :src="member.user.avatarUrl || defaultAvatarUrl" :alt="memberName(member)" />
           </div>
           <span>
             <strong>{{ memberName(member) }}</strong>

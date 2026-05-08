@@ -2,6 +2,7 @@ import axios from 'axios';
 import type { AxiosInstance, AxiosRequestConfig } from 'axios';
 import type { User } from '../types';
 import { clearAuthSession, isRememberedSession, persistAuthSession, readAuthValue } from '../utils/authStorage';
+import { getDeviceName } from '../utils/deviceInfo';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://weiladream.cn:18080/api';
 
@@ -41,6 +42,12 @@ class ApiService {
       async (error) => {
         const originalConfig = error.config as RetriableRequestConfig | undefined;
         const status = error.response?.status;
+        const replacementNotice = this.getSessionReplacementNotice(error);
+        if (replacementNotice) {
+          this.clearSession('session-replaced', replacementNotice);
+          return Promise.reject(error);
+        }
+
         const canRefresh =
           status === 401 &&
           originalConfig &&
@@ -61,7 +68,7 @@ class ApiService {
         }
 
         if (status === 401) {
-          this.clearSession();
+          this.clearSession('expired');
         }
 
         return Promise.reject(error);
@@ -135,6 +142,7 @@ class ApiService {
     try {
       const response = await axios.post<AuthResponse>(`${API_BASE_URL}/auth/refresh`, {
         refreshToken,
+        deviceName: getDeviceName(),
       });
       const session = response.data;
       persistAuthSession(session, isRememberedSession());
@@ -142,16 +150,69 @@ class ApiService {
         detail: session,
       }));
       return session.accessToken;
-    } catch {
-      this.clearSession();
+    } catch (error) {
+      const replacementNotice = this.getSessionReplacementNotice(error);
+      this.clearSession(replacementNotice ? 'session-replaced' : 'expired', replacementNotice ?? undefined);
       return null;
     }
   }
 
-  private clearSession(): void {
+  private clearSession(reason: 'expired' | 'session-replaced' = 'expired', replacementNotice?: SessionReplacementNotice): void {
     clearAuthSession(false);
+    if (reason === 'session-replaced') {
+      window.dispatchEvent(new CustomEvent('nexacord:session-replaced', {
+        detail: replacementNotice ?? { deviceName: '另一台设备' },
+      }));
+      return;
+    }
+
     window.dispatchEvent(new CustomEvent('nexacord:auth-expired'));
   }
+
+  private getSessionReplacementNotice(error: unknown): SessionReplacementNotice | null {
+    const response = (error as any)?.response;
+    if (!response || response.status !== 401) {
+      return null;
+    }
+
+    const reason =
+      this.getHeader(response.headers, 'x-nexacord-auth-reason') ||
+      response.data?.reason;
+    if (reason !== 'SESSION_REPLACED') {
+      return null;
+    }
+
+    const encodedDeviceName = this.getHeader(response.headers, 'x-nexacord-auth-device');
+    const bodyDeviceName = response.data?.deviceName;
+    return {
+      deviceName: this.decodeHeaderValue(encodedDeviceName) || bodyDeviceName || '另一台设备',
+    };
+  }
+
+  private getHeader(headers: unknown, key: string): string | undefined {
+    if (!headers) {
+      return undefined;
+    }
+
+    const headerRecord = headers as Record<string, string | undefined>;
+    return headerRecord[key] || headerRecord[key.toLowerCase()] || headerRecord[key.toUpperCase()];
+  }
+
+  private decodeHeaderValue(value?: string): string | undefined {
+    if (!value) {
+      return undefined;
+    }
+
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
+  }
 }
+
+type SessionReplacementNotice = {
+  deviceName: string;
+};
 
 export default new ApiService();

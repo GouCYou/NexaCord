@@ -14,7 +14,7 @@
 
       <div class="popover-body">
         <div class="popover-avatar">
-          <img :src="profileUser.avatarUrl || defaultAvatarUrl" :alt="displayName" />
+          <AvatarImage :src="profileUser.avatarUrl || defaultAvatarUrl" :alt="displayName" />
           <i :class="['status-dot', profileUser.status || 'offline']"></i>
         </div>
 

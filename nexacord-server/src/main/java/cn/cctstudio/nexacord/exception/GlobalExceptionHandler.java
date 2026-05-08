@@ -12,6 +12,8 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -40,6 +42,22 @@ public class GlobalExceptionHandler {
         Map<String, String> errorResponse = new HashMap<>();
         errorResponse.put("error", ex.getMessage());
         return new ResponseEntity<>(errorResponse, HttpStatus.UNAUTHORIZED);
+    }
+
+    @ExceptionHandler(SessionReplacedException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public ResponseEntity<Map<String, String>> handleSessionReplacedException(SessionReplacedException ex) {
+        Map<String, String> errorResponse = new HashMap<>();
+        String deviceName = ex.getDeviceName() == null || ex.getDeviceName().isBlank()
+                ? "另一台设备"
+                : ex.getDeviceName();
+        errorResponse.put("error", ex.getMessage());
+        errorResponse.put("reason", "SESSION_REPLACED");
+        errorResponse.put("deviceName", deviceName);
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .header("X-Nexacord-Auth-Reason", "SESSION_REPLACED")
+                .header("X-Nexacord-Auth-Device", URLEncoder.encode(deviceName, StandardCharsets.UTF_8))
+                .body(errorResponse);
     }
 
     @ExceptionHandler(org.springframework.security.core.AuthenticationException.class)

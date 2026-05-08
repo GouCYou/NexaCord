@@ -133,6 +133,7 @@ import { useRoute, useRouter } from 'vue-router';
 import authService from '../services/authService';
 import { useUserStore } from '../stores/userStore';
 import type { LoginRequest } from '../types';
+import { getDeviceName } from '../utils/deviceInfo';
 import { getPasswordStrengthError } from '../utils/passwordPolicy';
 
 const router = useRouter();
@@ -174,7 +175,10 @@ const canResetPassword = computed(
 const handleLogin = async () => {
   localError.value = '';
   localNotice.value = '';
-  const success = await userStore.login(loginForm.value, { rememberMe: rememberMe.value });
+  const success = await userStore.login({
+    ...loginForm.value,
+    deviceName: getDeviceName(),
+  }, { rememberMe: rememberMe.value });
   if (!success) {
     return;
   }
@@ -449,16 +453,17 @@ const handleResetPassword = async () => {
 
 .auth-shell {
   place-items: center;
-  padding: 24px;
+  padding: clamp(12px, 2.4dvh, 24px);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(244, 247, 251, 0.98)),
     var(--discord-bg);
 }
 
 .auth-card {
-  width: min(1040px, 100%);
-  min-height: min(720px, calc(100dvh - 48px));
-  max-height: calc(100dvh - 48px);
+  width: min(1040px, calc(100vw - 24px));
+  height: min(720px, calc(100dvh - clamp(24px, 4.8dvh, 48px)));
+  min-height: 0;
+  max-height: none;
   grid-template-columns: minmax(360px, 0.96fr) minmax(360px, 0.9fr);
   border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: 28px;
@@ -469,8 +474,8 @@ const handleResetPassword = async () => {
 .brand-panel {
   position: relative;
   align-content: end;
-  min-height: 520px;
-  padding: 48px;
+  min-height: 0;
+  padding: clamp(28px, 5dvh, 48px);
   color: #ffffff;
   background:
     linear-gradient(145deg, rgba(9, 14, 28, 0.94), rgba(25, 40, 76, 0.9) 58%, rgba(23, 93, 112, 0.88)),
@@ -518,7 +523,7 @@ const handleResetPassword = async () => {
 .brand-panel h1 {
   max-width: 500px;
   color: #ffffff;
-  font-size: clamp(40px, 4.5vw, 60px);
+  font-size: clamp(34px, 5.8dvh, 60px);
   line-height: 1;
 }
 
@@ -604,6 +609,7 @@ const handleResetPassword = async () => {
 @media (max-width: 860px) {
   .auth-card {
     grid-template-columns: 1fr;
+    height: auto;
     max-height: none;
   }
 
@@ -614,18 +620,56 @@ const handleResetPassword = async () => {
 }
 
 @media (max-height: 760px) {
-  .auth-shell {
-    align-items: start;
-  }
-
   .auth-card {
-    min-height: calc(100dvh - 32px);
-    max-height: none;
+    height: calc(100dvh - 24px);
   }
 
   .brand-panel,
   .form-panel {
-    padding: 32px;
+    padding: 28px;
+  }
+
+  .brand-panel {
+    gap: 10px;
+  }
+
+  .brand-panel h1 {
+    font-size: clamp(30px, 5.2dvh, 44px);
+  }
+
+  .brand-panel p {
+    font-size: 14px;
+  }
+
+  .brand-preview {
+    width: min(320px, 100%);
+    margin-top: 4px;
+    padding: 12px;
+  }
+}
+
+@media (max-height: 640px) and (min-width: 861px) {
+  .brand-panel h1 {
+    font-size: 30px;
+  }
+
+  .brand-mark {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+  }
+
+  .brand-preview {
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .brand-preview span {
+    height: 8px;
+  }
+
+  .form-panel {
+    gap: 14px;
   }
 }
 </style>

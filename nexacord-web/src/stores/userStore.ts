@@ -9,8 +9,10 @@ export const useUserStore = defineStore('user', () => {
   const currentUser = ref<User | null>(null);
   const isLoading = ref(false);
   const error = ref<string | null>(null);
+  const sessionReplacementNotice = ref<SessionReplacementNotice | null>(null);
   let statusRealtimeInitialized = false;
   let authLifecycleInitialized = false;
+  let authSessionSubscriptionCleanup: (() => void) | null = null;
 
   const isAuthenticated = computed(() => Boolean(currentUser.value));
 
@@ -35,6 +37,22 @@ export const useUserStore = defineStore('user', () => {
     statusRealtimeInitialized = true;
   };
 
+  const subscribeAuthSessionEvents = () => {
+    authSessionSubscriptionCleanup?.();
+    authSessionSubscriptionCleanup = null;
+
+    if (!currentUser.value || !websocketService.isConnected()) {
+      return;
+    }
+
+    authSessionSubscriptionCleanup = websocketService.subscribe(`/topic/auth/user/${currentUser.value.id}`, (payload) => {
+      const notice = payload as SessionReplacementNotice & { type?: string };
+      if (notice?.type === 'SESSION_REPLACED') {
+        handleSessionReplacement(notice);
+      }
+    });
+  };
+
   const initializeAuthLifecycle = () => {
     if (authLifecycleInitialized) {
       return;
@@ -49,12 +67,24 @@ export const useUserStore = defineStore('user', () => {
       if (session?.accessToken) {
         websocketService.updateToken(session.accessToken);
       }
+      subscribeAuthSessionEvents();
     });
 
     window.addEventListener('nexacord:auth-expired', () => {
+      authSessionSubscriptionCleanup?.();
+      authSessionSubscriptionCleanup = null;
       websocketService.disconnect();
       currentUser.value = null;
       error.value = '登录状态已过期，请重新登录。';
+    });
+
+    window.addEventListener('nexacord:session-replaced', (event) => {
+      const detail = (event as CustomEvent<SessionReplacementNotice>).detail;
+      handleSessionReplacement(detail);
+    });
+
+    websocketService.on('connect', () => {
+      subscribeAuthSessionEvents();
     });
 
     authLifecycleInitialized = true;
@@ -75,6 +105,7 @@ export const useUserStore = defineStore('user', () => {
     if (token) {
       websocketService.initialize(token);
     }
+    subscribeAuthSessionEvents();
   };
 
   const login = async (credentials: LoginRequest, options: { rememberMe?: boolean } = {}) => {
@@ -90,6 +121,7 @@ export const useUserStore = defineStore('user', () => {
         initializeAuthLifecycle();
         initializeStatusRealtime();
         websocketService.initialize(token);
+        subscribeAuthSessionEvents();
       }
 
       return true;
@@ -148,6 +180,7 @@ export const useUserStore = defineStore('user', () => {
         initializeAuthLifecycle();
         initializeStatusRealtime();
         websocketService.initialize(token);
+        subscribeAuthSessionEvents();
       }
 
       return true;
@@ -164,8 +197,28 @@ export const useUserStore = defineStore('user', () => {
 
   const logout = () => {
     authService.logout();
+    authSessionSubscriptionCleanup?.();
+    authSessionSubscriptionCleanup = null;
     websocketService.disconnect();
     currentUser.value = null;
+    error.value = null;
+  };
+
+  const handleSessionReplacement = (notice?: SessionReplacementNotice | null) => {
+    sessionReplacementNotice.value = {
+      deviceName: notice?.deviceName || '另一台设备',
+      loggedInAt: notice?.loggedInAt,
+    };
+    authService.clearSession(false);
+    authSessionSubscriptionCleanup?.();
+    authSessionSubscriptionCleanup = null;
+    websocketService.disconnect();
+    currentUser.value = null;
+    error.value = '你的账号已在其他设备登录。';
+  };
+
+  const acknowledgeSessionReplacement = () => {
+    sessionReplacementNotice.value = null;
     error.value = null;
   };
 
@@ -173,6 +226,7 @@ export const useUserStore = defineStore('user', () => {
     currentUser,
     isLoading,
     error,
+    sessionReplacementNotice,
     isAuthenticated,
     initializeUser,
     login,
@@ -180,5 +234,11 @@ export const useUserStore = defineStore('user', () => {
     refreshCurrentUser,
     updateProfile,
     logout,
+    acknowledgeSessionReplacement,
   };
 });
+
+type SessionReplacementNotice = {
+  deviceName?: string;
+  loggedInAt?: string;
+};

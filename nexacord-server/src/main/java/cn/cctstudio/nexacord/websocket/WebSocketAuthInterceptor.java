@@ -13,6 +13,9 @@ import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+
+import java.util.Objects;
 
 @Component
 @RequiredArgsConstructor
@@ -33,8 +36,9 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
                 token = token.substring(7);
                 if (jwtTokenProvider.validateToken(token)) {
                     String username = jwtTokenProvider.getUsernameFromToken(token);
+                    String sessionId = jwtTokenProvider.getSessionIdFromToken(token);
                     User user = userService.findByUsername(username);
-                    if (user != null) {
+                    if (user != null && isCurrentSession(user, sessionId)) {
                         UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
                         SecurityContextHolder.getContext().setAuthentication(authentication);
                         accessor.setUser(authentication);
@@ -43,5 +47,9 @@ public class WebSocketAuthInterceptor implements ChannelInterceptor {
             }
         }
         return message;
+    }
+
+    private boolean isCurrentSession(User user, String sessionId) {
+        return !StringUtils.hasText(user.getActiveSessionId()) || Objects.equals(user.getActiveSessionId(), sessionId);
     }
 }

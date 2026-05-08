@@ -8,7 +8,7 @@
         @click="openUserPopover(currentConversation.otherUser, $event)"
       >
         <span class="direct-avatar">
-          <img :src="currentConversation.otherUser.avatarUrl || defaultAvatarUrl" :alt="displayUserName(currentConversation.otherUser)" />
+          <AvatarImage :src="currentConversation.otherUser.avatarUrl || defaultAvatarUrl" :alt="displayUserName(currentConversation.otherUser)" />
           <i :class="['status-dot', currentConversation.otherUser.status || 'offline']"></i>
         </span>
         <span>
@@ -44,7 +44,7 @@
       <template v-else>
         <div v-if="currentMessages.length === 0" class="direct-welcome">
           <div class="welcome-avatar">
-            <img :src="currentConversation.otherUser.avatarUrl || defaultAvatarUrl" :alt="displayUserName(currentConversation.otherUser)" />
+            <AvatarImage :src="currentConversation.otherUser.avatarUrl || defaultAvatarUrl" :alt="displayUserName(currentConversation.otherUser)" />
           </div>
           <h1>{{ displayUserName(currentConversation.otherUser) }}</h1>
           <p>这是你们私信的开始。</p>
@@ -57,7 +57,7 @@
           :class="{ own: message.author.id === currentUser?.id }"
         >
           <button class="message-avatar" type="button" @click="openUserPopover(message.author, $event)">
-            <img :src="message.author.avatarUrl || defaultAvatarUrl" :alt="displayUserName(message.author)" />
+            <AvatarImage :src="message.author.avatarUrl || defaultAvatarUrl" :alt="displayUserName(message.author)" />
           </button>
           <div class="message-body">
             <header>

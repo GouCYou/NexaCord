@@ -41,7 +41,7 @@
     <footer class="user-control">
       <button class="user-card" type="button" title="切换状态" @click="toggleStatusMenu">
         <div class="user-avatar">
-          <img :src="currentUser.avatarUrl || defaultAvatarUrl" :alt="displayName" />
+          <AvatarImage :src="currentUser.avatarUrl || defaultAvatarUrl" :alt="displayName" />
           <i :class="['status-dot', currentUser.status || 'online']"></i>
         </div>
 

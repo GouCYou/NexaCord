@@ -36,7 +36,7 @@
         @click="openConversation(conversation.id)"
       >
         <span class="dm-avatar">
-          <img :src="conversation.otherUser.avatarUrl || defaultAvatarUrl" :alt="displayNameOf(conversation.otherUser)" />
+          <AvatarImage :src="conversation.otherUser.avatarUrl || defaultAvatarUrl" :alt="displayNameOf(conversation.otherUser)" />
           <i :class="['status-dot', conversation.otherUser.status || 'offline']"></i>
         </span>
         <span class="dm-copy">
