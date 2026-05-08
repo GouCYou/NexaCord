@@ -126,7 +126,13 @@
               <button class="circle-action" type="button" title="发送消息" @click="openDirectConversation(friendship.user)">
                 <MessageCircle :size="18" aria-hidden="true" />
               </button>
-              <button class="circle-action danger" type="button" title="移除好友" @click="removeFriend(friendship.id)">
+              <button
+                class="circle-action danger"
+                type="button"
+                :class="{ confirming: confirmingRemoveFriendId === friendship.id }"
+                :title="confirmingRemoveFriendId === friendship.id ? '再次点击确认删除好友' : '移除好友'"
+                @click="removeFriend(friendship.id)"
+              >
                 <Trash2 :size="17" aria-hidden="true" />
               </button>
             </div>
@@ -189,6 +195,7 @@ const searchQuery = ref('');
 const friendError = ref('');
 const isSubmittingFriend = ref(false);
 const addFriendForm = ref<HTMLFormElement | null>(null);
+const confirmingRemoveFriendId = ref<number | null>(null);
 
 const onlineFriends = computed(() =>
   friends.value.filter((friendship) => friendship.user.status && friendship.user.status !== 'offline')
@@ -281,7 +288,15 @@ const acceptRequest = async (friendshipId: number) => {
 };
 
 const removeFriend = async (friendshipId: number) => {
+  if (friends.value.some((friendship) => friendship.id === friendshipId)) {
+    if (confirmingRemoveFriendId.value !== friendshipId) {
+      confirmingRemoveFriendId.value = friendshipId;
+      return;
+    }
+  }
+
   await friendService.deleteFriendship(friendshipId);
+  confirmingRemoveFriendId.value = null;
   await loadFriends();
 };
 
@@ -590,6 +605,12 @@ onBeforeUnmount(() => {
 
 .circle-action.danger:hover:not(:disabled) {
   color: #ff8b8d;
+}
+
+.circle-action.confirming {
+  background: color-mix(in srgb, var(--discord-red) 18%, var(--discord-surface));
+  color: #ff8b8d;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--discord-red) 28%, transparent);
 }
 
 .add-friend-panel {

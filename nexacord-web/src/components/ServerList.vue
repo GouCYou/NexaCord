@@ -9,6 +9,7 @@
         @click="openHome"
       >
         <img class="server-image" src="/logo.png" alt="Nexacord" />
+        <span v-if="hasHomeUnread" class="server-red-dot" aria-hidden="true"></span>
       </button>
       <span class="server-tooltip">好友</span>
     </div>
@@ -39,6 +40,7 @@
       >
         <img v-if="server.iconUrl" class="server-image" :src="server.iconUrl" :alt="server.name" />
         <ServerIcon v-else :size="22" aria-hidden="true" />
+        <span v-if="hasServerUnread(server.id)" class="server-red-dot" aria-hidden="true"></span>
       </button>
       <span class="server-tooltip">{{ server.name }}</span>
     </div>
@@ -96,11 +98,15 @@ import { useRouter } from 'vue-router';
 import { Plus, Server as ServerIcon, X } from 'lucide-vue-next';
 import { useChannelStore } from '../stores/channelStore';
 import { useServerStore } from '../stores/serverStore';
+import { useUnreadStore } from '../stores/unreadStore';
 
 const router = useRouter();
 const serverStore = useServerStore();
 const channelStore = useChannelStore();
+const unreadStore = useUnreadStore();
 const { servers, currentServerId, isLoading, error } = storeToRefs(serverStore);
+const { hasHomeUnread } = storeToRefs(unreadStore);
+const { hasServerUnread } = unreadStore;
 
 const showCreateServerModal = ref(false);
 const newServer = ref({
@@ -297,6 +303,18 @@ onBeforeUnmount(() => {
   height: 100%;
   object-fit: cover;
   border-radius: inherit;
+}
+
+.server-red-dot {
+  position: absolute;
+  right: 0;
+  top: 2px;
+  width: 11px;
+  height: 11px;
+  border: 3px solid var(--discord-rail);
+  border-radius: 50%;
+  background: var(--discord-red);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
 }
 
 .server-tooltip {

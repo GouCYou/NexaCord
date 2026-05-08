@@ -10,6 +10,7 @@ export const useUserStore = defineStore('user', () => {
   const isLoading = ref(false);
   const error = ref<string | null>(null);
   let statusRealtimeInitialized = false;
+  let authLifecycleInitialized = false;
 
   const isAuthenticated = computed(() => Boolean(currentUser.value));
 
@@ -34,30 +35,59 @@ export const useUserStore = defineStore('user', () => {
     statusRealtimeInitialized = true;
   };
 
+  const initializeAuthLifecycle = () => {
+    if (authLifecycleInitialized) {
+      return;
+    }
+
+    window.addEventListener('nexacord:auth-refreshed', (event) => {
+      const session = (event as CustomEvent<{ accessToken?: string; user?: User }>).detail;
+      if (session?.user) {
+        currentUser.value = session.user;
+        authService.setCurrentUser(session.user);
+      }
+      if (session?.accessToken) {
+        websocketService.updateToken(session.accessToken);
+      }
+    });
+
+    window.addEventListener('nexacord:auth-expired', () => {
+      websocketService.disconnect();
+      currentUser.value = null;
+      error.value = '登录状态已过期，请重新登录。';
+    });
+
+    authLifecycleInitialized = true;
+  };
+
   const initializeUser = () => {
+    initializeAuthLifecycle();
     const storedUser = authService.getCurrentUser();
     const token = authService.getToken();
 
-    if (!storedUser || !token) {
+    if (!storedUser || (!token && !authService.getRefreshToken())) {
       currentUser.value = null;
       return;
     }
 
     currentUser.value = storedUser;
     initializeStatusRealtime();
-    websocketService.initialize(token);
+    if (token) {
+      websocketService.initialize(token);
+    }
   };
 
-  const login = async (credentials: LoginRequest) => {
+  const login = async (credentials: LoginRequest, options: { rememberMe?: boolean } = {}) => {
     isLoading.value = true;
     error.value = null;
 
     try {
-      const response = await authService.login(credentials);
+      const response = await authService.login(credentials, options.rememberMe ?? true);
       currentUser.value = response.user;
 
       const token = authService.getToken();
       if (token) {
+        initializeAuthLifecycle();
         initializeStatusRealtime();
         websocketService.initialize(token);
       }
@@ -115,6 +145,7 @@ export const useUserStore = defineStore('user', () => {
 
       const token = authService.getToken();
       if (token) {
+        initializeAuthLifecycle();
         initializeStatusRealtime();
         websocketService.initialize(token);
       }

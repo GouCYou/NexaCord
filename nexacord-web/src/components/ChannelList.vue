@@ -77,6 +77,7 @@
                 >
                   <Hash class="channel-prefix" :size="18" aria-hidden="true" />
                   <span class="channel-label">{{ channel.name }}</span>
+                  <span v-if="hasChannelUnread(channel.id)" class="channel-red-dot" aria-hidden="true"></span>
                 </button>
 
                 <div class="channel-actions">
@@ -226,6 +227,7 @@ import ChannelSettingsModal from './ChannelSettingsModal.vue';
 import UserControlPanel from './UserControlPanel.vue';
 import { useChannelStore } from '../stores/channelStore';
 import { useServerStore } from '../stores/serverStore';
+import { useUnreadStore } from '../stores/unreadStore';
 import { useUserStore } from '../stores/userStore';
 import { useVoiceStore, type VoiceUser } from '../stores/voiceStore';
 import type { Channel } from '../types';
@@ -235,6 +237,7 @@ const serverStore = useServerStore();
 const channelStore = useChannelStore();
 const userStore = useUserStore();
 const voiceStore = useVoiceStore();
+const unreadStore = useUnreadStore();
 
 const { currentServer, currentServerId } = storeToRefs(serverStore);
 const { channels, currentChannelId, isLoading, error } = storeToRefs(channelStore);
@@ -242,6 +245,7 @@ const {
   activeChannelId: activeVoiceChannelId,
 } = storeToRefs(voiceStore);
 const { displayNameOf, getParticipantCountForChannel, getParticipantsForChannel, getVoiceLevel, isUserSpeaking } = voiceStore;
+const { hasChannelUnread, markChannelRead } = unreadStore;
 
 const showCreateChannelModal = ref(false);
 const showServerMenu = ref(false);
@@ -360,6 +364,7 @@ const selectChannel = (channelId: number) => {
   }
 
   channelStore.setCurrentChannel(channelId);
+  markChannelRead(channelId);
   router.push(`/servers/${currentServerId.value}/channels/${channelId}`);
 };
 
@@ -653,6 +658,14 @@ onBeforeUnmount(() => {
   font-size: 12px;
   font-weight: 900;
   text-align: right;
+}
+
+.channel-red-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--discord-red);
 }
 
 .voice-members {

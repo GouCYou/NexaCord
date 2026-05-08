@@ -41,7 +41,7 @@
               :disabled="invitedUserIds.has(friendship.user.id) || invitingUserId === friendship.user.id"
               @click="inviteFriend(friendship.user.id)"
             >
-              {{ invitedUserIds.has(friendship.user.id) ? '已邀请' : invitingUserId === friendship.user.id ? '邀请中' : '邀请' }}
+              {{ invitedUserIds.has(friendship.user.id) ? '已发送' : invitingUserId === friendship.user.id ? '发送中' : '邀请' }}
             </button>
           </article>
         </template>
@@ -70,12 +70,15 @@ import { storeToRefs } from 'pinia';
 import { Search, X } from 'lucide-vue-next';
 import friendService from '../services/friendService';
 import { useChannelStore } from '../stores/channelStore';
+import { useDirectMessageStore } from '../stores/directMessageStore';
 import { useServerStore } from '../stores/serverStore';
 import type { Friendship, ServerInvite } from '../types';
+import { buildDirectInviteMessage } from '../utils/inviteMessage';
 import { usernameTag } from '../utils/userDisplay';
 
 const serverStore = useServerStore();
 const channelStore = useChannelStore();
+const directMessageStore = useDirectMessageStore();
 const { currentServer, currentServerId } = storeToRefs(serverStore);
 const { currentChannel } = storeToRefs(channelStore);
 
@@ -161,11 +164,29 @@ const inviteFriend = async (userId: number) => {
   }
 
   invitingUserId.value = userId;
-  const member = await serverStore.addServerMember(currentServerId.value, userId);
-  if (member) {
-    invitedUserIds.value = new Set([...invitedUserIds.value, userId]);
+  try {
+    if (!currentInvite.value) {
+      await loadInvite();
+    }
+    if (!currentInvite.value) {
+      return;
+    }
+
+    const conversation = await directMessageStore.openConversationWithUser({ id: userId });
+    if (!conversation) {
+      return;
+    }
+
+    const sent = await directMessageStore.sendMessage(
+      conversation.id,
+      buildDirectInviteMessage(currentInvite.value)
+    );
+    if (sent) {
+      invitedUserIds.value = new Set([...invitedUserIds.value, userId]);
+    }
+  } finally {
+    invitingUserId.value = null;
   }
-  invitingUserId.value = null;
 };
 
 const refreshInvite = async () => {

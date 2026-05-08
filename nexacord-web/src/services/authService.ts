@@ -1,5 +1,12 @@
 import api from './api';
 import type { EmailCodeRequest, LoginRequest, PasswordResetRequest, RegisterRequest, User } from '../types';
+import {
+  clearAuthSession,
+  persistAuthSession,
+  readAuthValue,
+  shouldRememberByDefault,
+  updateStoredUser,
+} from '../utils/authStorage';
 
 type AuthResponse = {
   accessToken: string;
@@ -9,22 +16,16 @@ type AuthResponse = {
 };
 
 class AuthService {
-  async login(credentials: LoginRequest): Promise<AuthResponse> {
+  async login(credentials: LoginRequest, rememberMe = shouldRememberByDefault()): Promise<AuthResponse> {
     const response = await api.post<AuthResponse>('/auth/login', credentials);
-    if (response.accessToken) {
-      localStorage.setItem('token', response.accessToken);
-      localStorage.setItem('user', JSON.stringify(response.user));
-    }
+    this.persistSession(response, rememberMe);
 
     return response;
   }
 
   async register(credentials: RegisterRequest): Promise<AuthResponse> {
     const response = await api.post<AuthResponse>('/auth/register', credentials);
-    if (response.accessToken) {
-      localStorage.setItem('token', response.accessToken);
-      localStorage.setItem('user', JSON.stringify(response.user));
-    }
+    this.persistSession(response, true);
 
     return response;
   }
@@ -38,16 +39,15 @@ class AuthService {
   }
 
   logout(): void {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    clearAuthSession();
   }
 
   setCurrentUser(user: User): void {
-    localStorage.setItem('user', JSON.stringify(user));
+    updateStoredUser(user);
   }
 
   getCurrentUser(): User | null {
-    const userStr = localStorage.getItem('user');
+    const userStr = readAuthValue('user');
     if (!userStr) {
       return null;
     }
@@ -55,18 +55,33 @@ class AuthService {
     try {
       return JSON.parse(userStr);
     } catch {
-      localStorage.removeItem('user');
-      localStorage.removeItem('token');
+      clearAuthSession();
       return null;
     }
   }
 
   isAuthenticated(): boolean {
-    return Boolean(localStorage.getItem('token'));
+    return Boolean(readAuthValue('token') || readAuthValue('refreshToken'));
   }
 
   getToken(): string | null {
-    return localStorage.getItem('token');
+    return readAuthValue('token');
+  }
+
+  getRefreshToken(): string | null {
+    return readAuthValue('refreshToken');
+  }
+
+  shouldRememberByDefault(): boolean {
+    return shouldRememberByDefault();
+  }
+
+  private persistSession(response: AuthResponse, rememberMe: boolean): void {
+    if (!response.accessToken) {
+      return;
+    }
+
+    persistAuthSession(response, rememberMe);
   }
 }
 

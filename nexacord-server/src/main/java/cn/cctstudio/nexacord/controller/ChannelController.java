@@ -10,10 +10,12 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/channels")
@@ -21,12 +23,14 @@ import java.util.List;
 public class ChannelController {
     private final ChannelService channelService;
     private final ServerService serverService;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @PostMapping("/server/{serverId}")
     public ResponseEntity<Channel> createChannel(@PathVariable Long serverId, @Valid @RequestBody Channel channel, @AuthenticationPrincipal User currentUser) {
         requireManager(serverId, currentUser);
         Server server = serverService.getServerById(serverId);
         Channel createdChannel = channelService.createChannel(channel, server);
+        publishChannelUpdate("CHANNEL_CREATED", serverId, createdChannel);
         return new ResponseEntity<>(createdChannel, HttpStatus.CREATED);
     }
 
@@ -50,6 +54,7 @@ public class ChannelController {
         requireManager(existingChannel.getServer().getId(), currentUser);
         channel.setId(id);
         Channel updatedChannel = channelService.updateChannel(channel);
+        publishChannelUpdate("CHANNEL_UPDATED", updatedChannel.getServer().getId(), updatedChannel);
         return new ResponseEntity<>(updatedChannel, HttpStatus.OK);
     }
 
@@ -58,6 +63,7 @@ public class ChannelController {
         Channel channel = channelService.getChannelById(id);
         requireManager(channel.getServer().getId(), currentUser);
         channelService.deleteChannel(id);
+        publishChannelUpdate("CHANNEL_DELETED", channel.getServer().getId(), channel);
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
@@ -71,5 +77,16 @@ public class ChannelController {
         if (currentUser == null || !serverService.isServerManager(serverId, currentUser.getId())) {
             throw new AccessDeniedException("你没有管理频道的权限。");
         }
+    }
+
+    private void publishChannelUpdate(String type, Long serverId, Channel channel) {
+        messagingTemplate.convertAndSend(
+                "/topic/channels/update",
+                Map.of(
+                        "type", type,
+                        "serverId", serverId,
+                        "channelId", channel.getId()
+                )
+        );
     }
 }

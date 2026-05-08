@@ -3,13 +3,10 @@
     <section class="user-popover" :style="popoverStyle" role="dialog" aria-label="用户资料卡" @click.stop>
       <div class="popover-banner" :style="bannerStyle">
         <div v-if="!isSelf" class="popover-tools">
-          <button type="button" title="静音">
-            <MicOff :size="14" aria-hidden="true" />
-          </button>
-          <button type="button" title="身份组">
+          <button type="button" title="身份组" @click="toggleRoleMenu">
             <UserCheck :size="14" aria-hidden="true" />
           </button>
-          <button type="button" title="更多">
+          <button type="button" title="更多" @click="showNotice('更多资料操作会继续放在这里。')">
             <MoreHorizontal :size="15" aria-hidden="true" />
           </button>
         </div>
@@ -51,21 +48,45 @@
             <PhoneCall :size="14" aria-hidden="true" />
             <span>呼叫</span>
           </button>
+          <button type="button" @click="handleFriendAction">
+            <UserMinus v-if="friendState === 'accepted'" :size="14" aria-hidden="true" />
+            <UserPlus v-else :size="14" aria-hidden="true" />
+            <span>{{ friendActionLabel }}</span>
+          </button>
         </div>
 
-        <button class="add-role-button" type="button">
-          <Plus :size="14" aria-hidden="true" />
-          <span>添加身份组</span>
-        </button>
+        <div class="role-panel">
+          <button class="add-role-button" type="button" @click="toggleRoleMenu">
+            <Plus :size="14" aria-hidden="true" />
+            <span>{{ role === 'ADMIN' ? '管理身份组' : '添加身份组' }}</span>
+          </button>
+          <div v-if="showRoleMenu" class="role-menu">
+            <button type="button" :class="{ active: role === 'ADMIN' }" @click="updateRole('ADMIN')">
+              管理员
+            </button>
+            <button type="button" :class="{ active: role === 'MEMBER' }" @click="updateRole('MEMBER')">
+              成员
+            </button>
+          </div>
+        </div>
 
-        <label v-if="!isSelf" class="dm-input">
+        <p v-if="popoverNotice" class="popover-notice">{{ popoverNotice }}</p>
+
+        <div v-if="!isSelf" class="dm-input">
           <input
             v-model="quickMessage"
             :placeholder="`私信 ${usernameTag(profileUser.username)}`"
             @keydown.enter.prevent="sendQuickMessage"
           />
-          <Smile :size="15" aria-hidden="true" />
-        </label>
+          <button type="button" title="插入表情" @click="showEmojiMenu = !showEmojiMenu">
+            <Smile :size="15" aria-hidden="true" />
+          </button>
+          <div v-if="showEmojiMenu" class="emoji-menu">
+            <button v-for="emoji in emojiOptions" :key="emoji" type="button" @click="insertEmoji(emoji)">
+              {{ emoji }}
+            </button>
+          </div>
+        </div>
       </div>
     </section>
   </div>
@@ -77,7 +98,6 @@ import { useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import {
   MessageCircle,
-  MicOff,
   MoreHorizontal,
   Pencil,
   PhoneCall,
@@ -85,7 +105,10 @@ import {
   Server as ServerIcon,
   Smile,
   UserCheck,
+  UserMinus,
+  UserPlus,
 } from 'lucide-vue-next';
+import friendService from '../services/friendService';
 import { useDirectMessageStore } from '../stores/directMessageStore';
 import { useServerStore } from '../stores/serverStore';
 import { useUserStore } from '../stores/userStore';
@@ -103,6 +126,7 @@ type PopoverUser = Partial<User> & {
 
 type OpenUserPopoverDetail = {
   user: PopoverUser;
+  memberId?: number | null;
   role?: MemberRole;
   serverName?: string | null;
   serverIconUrl?: string | null;
@@ -125,6 +149,13 @@ const role = ref<MemberRole | null>(null);
 const serverName = ref('');
 const serverIconUrl = ref<string | null>(null);
 const quickMessage = ref('');
+const popoverNotice = ref('');
+const showRoleMenu = ref(false);
+const showEmojiMenu = ref(false);
+const memberId = ref<number | null>(null);
+const friendshipId = ref<number | null>(null);
+const friendState = ref<'unknown' | 'none' | 'accepted' | 'incoming' | 'outgoing'>('unknown');
+const confirmRemoveFriend = ref(false);
 const position = reactive({
   left: 0,
   top: 0,
@@ -144,6 +175,26 @@ const displayName = computed(() => {
 
 const isSelf = computed(() => Boolean(profileUser.value && currentUser.value?.id === profileUser.value.id));
 const roleText = computed(() => (role.value ? roleLabels[role.value] : ''));
+const canManageRole = computed(
+  () =>
+    Boolean(currentServer.value?.id) &&
+    Boolean(memberId.value) &&
+    !isSelf.value &&
+    role.value !== 'OWNER'
+);
+const friendActionLabel = computed(() => {
+  if (friendState.value === 'accepted') {
+    return confirmRemoveFriend.value ? '确认删除好友' : '删除好友';
+  }
+  if (friendState.value === 'incoming') {
+    return '待接受';
+  }
+  if (friendState.value === 'outgoing') {
+    return '已申请';
+  }
+  return '添加好友';
+});
+const emojiOptions = ['😀', '😂', '👍', '🎮', '🔥', '❤️'];
 
 const bannerStyle = computed(() => {
   const user = profileUser.value;
@@ -195,15 +246,159 @@ const openPopover = (event: Event) => {
 
   profileUser.value = enrichedUser;
   role.value = detail.role || null;
+  memberId.value = detail.memberId || null;
   serverName.value = detail.serverName || currentServer.value?.name || '';
   serverIconUrl.value = detail.serverIconUrl || currentServer.value?.iconUrl || null;
   quickMessage.value = '';
+  popoverNotice.value = '';
+  showRoleMenu.value = false;
+  showEmojiMenu.value = false;
+  friendState.value = 'unknown';
+  friendshipId.value = null;
+  confirmRemoveFriend.value = false;
   clampPosition(detail.x, detail.y);
   isOpen.value = true;
+  void refreshFriendState();
 };
 
 const closePopover = () => {
   isOpen.value = false;
+  popoverNotice.value = '';
+  showRoleMenu.value = false;
+  showEmojiMenu.value = false;
+  confirmRemoveFriend.value = false;
+};
+
+const showNotice = (message: string) => {
+  popoverNotice.value = message;
+};
+
+const refreshFriendState = async () => {
+  if (isSelf.value || !profileUser.value) {
+    friendState.value = 'none';
+    return;
+  }
+
+  const targetId = profileUser.value.id;
+  try {
+    const [friends, incoming, outgoing] = await Promise.all([
+      friendService.getFriends(),
+      friendService.getIncomingRequests(),
+      friendService.getOutgoingRequests(),
+    ]);
+    if (friends.some((friendship) => friendship.user.id === targetId)) {
+      friendshipId.value = friends.find((friendship) => friendship.user.id === targetId)?.id || null;
+      friendState.value = 'accepted';
+      return;
+    }
+    if (incoming.some((friendship) => friendship.user.id === targetId)) {
+      friendshipId.value = incoming.find((friendship) => friendship.user.id === targetId)?.id || null;
+      friendState.value = 'incoming';
+      return;
+    }
+    if (outgoing.some((friendship) => friendship.user.id === targetId)) {
+      friendshipId.value = outgoing.find((friendship) => friendship.user.id === targetId)?.id || null;
+      friendState.value = 'outgoing';
+      return;
+    }
+    friendshipId.value = null;
+    friendState.value = 'none';
+  } catch {
+    friendState.value = 'unknown';
+  }
+};
+
+const handleFriendAction = async () => {
+  if (!profileUser.value) {
+    return;
+  }
+
+  if (friendState.value === 'accepted') {
+    if (!confirmRemoveFriend.value) {
+      confirmRemoveFriend.value = true;
+      showNotice('再次点击“确认删除好友”会解除好友关系。');
+      return;
+    }
+
+    if (!friendshipId.value) {
+      await refreshFriendState();
+      showNotice('暂时没有找到这条好友关系，请稍后再试。');
+      return;
+    }
+
+    try {
+      await friendService.deleteFriendship(friendshipId.value);
+      friendState.value = 'none';
+      friendshipId.value = null;
+      confirmRemoveFriend.value = false;
+      showNotice('已删除好友。');
+      return;
+    } catch (err: any) {
+      showNotice(err.response?.data?.error || err.response?.data?.message || '删除好友失败。');
+      return;
+    }
+  }
+
+  confirmRemoveFriend.value = false;
+  if (friendState.value === 'incoming') {
+    if (friendshipId.value) {
+      try {
+        await friendService.acceptFriendRequest(friendshipId.value);
+        await refreshFriendState();
+        showNotice('好友请求已接受。');
+        return;
+      } catch (err: any) {
+        showNotice(err.response?.data?.error || err.response?.data?.message || '接受好友请求失败。');
+        return;
+      }
+    }
+    return;
+  }
+  if (friendState.value === 'outgoing') {
+    showNotice('好友请求已经发送，等待对方接受。');
+    return;
+  }
+
+  try {
+    await friendService.createFriendRequest(profileUser.value.username);
+    friendState.value = 'outgoing';
+    showNotice('好友请求已发送。');
+  } catch (err: any) {
+    showNotice(err.response?.data?.error || err.response?.data?.message || '发送好友请求失败。');
+    await refreshFriendState();
+  }
+};
+
+const toggleRoleMenu = () => {
+  if (!profileUser.value || isSelf.value) {
+    return;
+  }
+
+  if (!memberId.value) {
+    showNotice('请在服务器成员列表中打开资料卡后再调整身份组。');
+    return;
+  }
+  if (!canManageRole.value) {
+    showNotice('不能修改这个成员的身份组。');
+    return;
+  }
+
+  showRoleMenu.value = !showRoleMenu.value;
+};
+
+const updateRole = async (nextRole: Extract<MemberRole, 'ADMIN' | 'MEMBER'>) => {
+  if (!currentServer.value?.id || !memberId.value || !canManageRole.value) {
+    return;
+  }
+
+  const member = await serverStore.updateServerMemberRole(currentServer.value.id, memberId.value, nextRole);
+  if (member) {
+    role.value = member.role;
+    showRoleMenu.value = false;
+    showNotice('身份组已更新。');
+  } else {
+    showNotice(serverStore.error || '更新身份组失败。');
+  }
 };
 
 const openProfileEditor = () => {
@@ -249,6 +444,11 @@ const startDirectCall = () => {
 
   voiceStore.startDirectCall(profileUser.value);
   closePopover();
+};
+
+const insertEmoji = (emoji: string) => {
+  quickMessage.value = `${quickMessage.value}${emoji}`;
+  showEmojiMenu.value = false;
 };
 
 const handleKeydown = (event: KeyboardEvent) => {
@@ -476,6 +676,10 @@ onBeforeUnmount(() => {
   gap: 7px;
 }
 
+.profile-actions button:nth-child(3) {
+  grid-column: 1 / -1;
+}
+
 .profile-actions button {
   background: var(--discord-muted-surface);
   color: var(--discord-text);
@@ -499,7 +703,52 @@ onBeforeUnmount(() => {
   font-weight: 800;
 }
 
+.role-panel {
+  position: relative;
+}
+
+.role-menu {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  z-index: 2;
+  min-width: 150px;
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--discord-border);
+  border-radius: 10px;
+  background: var(--discord-elevated);
+  box-shadow: var(--discord-shadow);
+}
+
+.role-menu button {
+  min-height: 34px;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--discord-text);
+  font-size: 12px;
+  font-weight: 900;
+  text-align: left;
+}
+
+.role-menu button:hover,
+.role-menu button.active {
+  background: var(--discord-hover);
+}
+
+.popover-notice {
+  margin: 0;
+  padding: 8px 9px;
+  border-radius: 8px;
+  background: var(--discord-subtle);
+  color: var(--discord-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .dm-input {
+  position: relative;
   min-height: 38px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -522,6 +771,40 @@ onBeforeUnmount(() => {
 
 .dm-input input:focus {
   outline: none;
+}
+
+.dm-input button {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: var(--discord-text-faint);
+}
+
+.dm-input button:hover {
+  background: var(--discord-hover);
+  color: var(--discord-text);
+}
+
+.emoji-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  display: flex;
+  gap: 4px;
+  padding: 7px;
+  border: 1px solid var(--discord-border);
+  border-radius: 999px;
+  background: var(--discord-elevated);
+  box-shadow: var(--discord-shadow);
+}
+
+.emoji-menu button {
+  width: 28px;
+  height: 28px;
+  font-size: 15px;
 }
 
 @keyframes popover-in {

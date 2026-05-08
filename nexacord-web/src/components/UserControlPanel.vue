@@ -18,19 +18,22 @@
           <VolumeX v-if="isDeafened" :size="18" aria-hidden="true" />
           <Headphones v-else :size="18" aria-hidden="true" />
         </button>
+        <button class="voice-action" type="button" title="音量控制" @click="toggleVoiceMixer">
+          <SlidersHorizontal :size="18" aria-hidden="true" />
+        </button>
         <button class="voice-action danger" type="button" title="断开语音" @click="disconnectVoice">
           <PhoneOff :size="18" aria-hidden="true" />
         </button>
       </div>
 
-      <div class="voice-sliders">
+      <div v-if="showVoiceMixer" class="voice-volume-popover" @click.stop>
         <label>
           <span>麦克风 {{ inputVolume }}%</span>
-          <input type="range" min="0" max="200" :value="inputVolume" @input="setInputVolumeFromEvent" />
+          <input class="volume-range" type="range" min="0" max="200" :value="inputVolume" @input="setInputVolumeFromEvent" />
         </label>
         <label>
           <span>扬声器 {{ outputVolume }}%</span>
-          <input type="range" min="0" max="200" :value="outputVolume" @input="setOutputVolumeFromEvent" />
+          <input class="volume-range" type="range" min="0" max="200" :value="outputVolume" @input="setOutputVolumeFromEvent" />
         </label>
       </div>
     </section>
@@ -110,6 +113,7 @@ import {
   PhoneOff,
   RadioTower,
   Settings,
+  SlidersHorizontal,
   Sun,
   VolumeX,
 } from 'lucide-vue-next';
@@ -136,6 +140,7 @@ const { activeChannelName, activeServerName, isJoined, isMuted, isDeafened, inpu
 const { leaveChannel, toggleMute, toggleDeafen, setInputVolume, setOutputVolume } = voiceStore;
 const showStatusMenu = ref(false);
 const showAccountMenu = ref(false);
+const showVoiceMixer = ref(false);
 const defaultAvatarUrl = '/logo.png';
 
 const statusOptions: Array<{
@@ -167,6 +172,13 @@ const toggleStatusMenu = () => {
 const toggleAccountMenu = () => {
   showAccountMenu.value = !showAccountMenu.value;
   showStatusMenu.value = false;
+  showVoiceMixer.value = false;
+};
+
+const toggleVoiceMixer = () => {
+  showVoiceMixer.value = !showVoiceMixer.value;
+  showStatusMenu.value = false;
+  showAccountMenu.value = false;
 };
 
 const setStatus = async (status: User['status']) => {
@@ -192,6 +204,7 @@ const switchAccount = () => {
 const closeMenus = () => {
   showStatusMenu.value = false;
   showAccountMenu.value = false;
+  showVoiceMixer.value = false;
 };
 
 const setInputVolumeFromEvent = (event: Event) => {
@@ -224,6 +237,7 @@ onBeforeUnmount(() => {
 }
 
 .voice-connection {
+  position: relative;
   display: grid;
   gap: 10px;
   padding: 10px 8px;
@@ -271,26 +285,51 @@ onBeforeUnmount(() => {
 
 .voice-connection-actions {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 6px;
 }
 
-.voice-sliders {
+.voice-volume-popover {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: calc(100% + 10px);
+  z-index: 35;
   display: grid;
-  gap: 8px;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--discord-strong-border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--discord-elevated) 94%, transparent);
+  box-shadow: var(--discord-shadow);
+  backdrop-filter: blur(18px);
 }
 
-.voice-sliders label {
+.voice-volume-popover::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 12px;
+  height: 12px;
+  background: inherit;
+  border-right: 1px solid var(--discord-strong-border);
+  border-bottom: 1px solid var(--discord-strong-border);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.voice-volume-popover label {
+  position: relative;
   display: grid;
-  gap: 5px;
-  color: var(--discord-text-faint);
-  font-size: 11px;
+  gap: 8px;
+  color: var(--discord-text-muted);
+  font-size: 12px;
   font-weight: 800;
 }
 
-.voice-sliders input {
+.volume-range {
   width: 100%;
-  accent-color: var(--discord-brand);
+  accent-color: var(--discord-text-muted);
 }
 
 .voice-action {

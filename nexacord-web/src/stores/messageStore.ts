@@ -3,6 +3,8 @@ import { ref } from 'vue';
 import type { Attachment, Message } from '../types';
 import messageService from '../services/messageService';
 import websocketService from '../services/websocketService';
+import { useUnreadStore } from './unreadStore';
+import { useUserStore } from './userStore';
 
 export type MessageAttachmentInput = Pick<
   Attachment,
@@ -22,6 +24,8 @@ const normalizeMessage = (message: Message): Message => ({
 });
 
 export const useMessageStore = defineStore('message', () => {
+  const unreadStore = useUnreadStore();
+  const userStore = useUserStore();
   const messages = ref<Record<number, Message[]>>({});
   const currentChannelMessages = ref<Message[]>([]);
   const activeChannelId = ref<number | null>(null);
@@ -87,7 +91,10 @@ export const useMessageStore = defineStore('message', () => {
 
     websocketService.on('message:new', (_event, payload) => {
       if (payload && typeof payload === 'object') {
-        addMessage(payload as Message);
+        const message = payload as Message;
+        addMessage(message);
+        unreadStore.initializeForUser(userStore.currentUser?.id);
+        unreadStore.markChannelUnread(message, activeChannelId.value, userStore.currentUser?.id);
       }
     });
 
@@ -121,6 +128,8 @@ export const useMessageStore = defineStore('message', () => {
       const fetchedMessages = await messageService.getChannelMessages(channelId, sort);
       setChannelMessages(channelId, fetchedMessages);
       syncCurrentChannelMessages();
+      unreadStore.initializeForUser(userStore.currentUser?.id);
+      unreadStore.markChannelRead(channelId, fetchedMessages.reduce((maxId, message) => Math.max(maxId, message.id), 0));
     } catch (err: any) {
       error.value =
         err.response?.data?.error ||

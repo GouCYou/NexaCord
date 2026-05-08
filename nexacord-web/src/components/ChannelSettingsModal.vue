@@ -138,10 +138,10 @@
           <Trash2 :size="28" aria-hidden="true" />
           <span>
             <strong>删除 #{{ channel.name }}</strong>
-            <small>如果仍要继续，请确认删除这个频道。</small>
+            <small>{{ confirmDelete ? '再次点击删除按钮，频道和消息会被移除。' : '如果仍要继续，请先确认删除这个频道。' }}</small>
           </span>
-          <button type="button" :disabled="isDeleting" @click="deleteChannel">
-            {{ isDeleting ? '删除中……' : '删除频道' }}
+          <button type="button" :class="{ confirming: confirmDelete }" :disabled="isDeleting" @click="deleteChannel">
+            {{ isDeleting ? '删除中……' : confirmDelete ? '确认删除频道' : '删除频道' }}
           </button>
         </div>
 
@@ -183,6 +183,7 @@ const channelStore = useChannelStore();
 const activeTab = ref<SettingsTab>('overview');
 const isSaving = ref(false);
 const isDeleting = ref(false);
+const confirmDelete = ref(false);
 const errorMessage = ref('');
 const slowMode = ref('0');
 const form = reactive({
@@ -234,6 +235,11 @@ const saveChannel = async () => {
 
 const deleteChannel = async () => {
   errorMessage.value = '';
+  if (!confirmDelete.value) {
+    confirmDelete.value = true;
+    return;
+  }
+
   isDeleting.value = true;
 
   try {
@@ -254,6 +260,9 @@ const openInvite = () => {
 };
 
 watch(() => props.channel.id, resetForm, { immediate: true });
+watch(activeTab, () => {
+  confirmDelete.value = false;
+});
 </script>
 
 <style scoped>
@@ -546,6 +555,12 @@ watch(() => props.channel.id, resetForm, { immediate: true });
 .delete-card button {
   background: var(--discord-red);
   color: white;
+}
+
+.delete-card button.confirming {
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--discord-red) 28%, transparent),
+    0 12px 30px color-mix(in srgb, var(--discord-red) 24%, transparent);
 }
 
 .form-error {

@@ -85,9 +85,9 @@ spring:
 ####################
 jwt:
   secret: ${JWT_SECRET:kfndORz7eM0MhZJ837YhYNyxqZO6O4zLgOjY7GROQwSLBdaACmb+wz2VSD2SrXo2uTYivZf0Ji0O3BLd4XQseg==}
-  expiration: ${JWT_EXPIRATION:3600000}
+  expiration: ${JWT_EXPIRATION:43200000}
   refresh-token:
-    expiration: ${JWT_REFRESH_EXPIRATION:604800000}
+    expiration: ${JWT_REFRESH_EXPIRATION:2592000000}
 
 ####################
 # 七牛云对象存储

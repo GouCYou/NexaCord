@@ -3,7 +3,7 @@
 # Start with: --spring.profiles.active=server
 ####################
 server:
-  port: ${SERVER_PORT:18080}
+  port: ${SERVER_PORT:8080}
   forward-headers-strategy: framework
   ssl:
     # If HTTPS is handled by Nginx/Caddy, keep this false.
@@ -73,9 +73,9 @@ spring:
 
 jwt:
   secret: ${JWT_SECRET}
-  expiration: ${JWT_EXPIRATION:3600000}
+  expiration: ${JWT_EXPIRATION:43200000}
   refresh-token:
-    expiration: ${JWT_REFRESH_EXPIRATION:604800000}
+    expiration: ${JWT_REFRESH_EXPIRATION:2592000000}
 
 qiniu:
   access-key: ${QINIU_ACCESS_KEY}

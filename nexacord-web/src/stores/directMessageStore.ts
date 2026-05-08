@@ -3,6 +3,7 @@ import { defineStore } from 'pinia';
 import directMessageService, { type DirectMessageCreateAttachment } from '../services/directMessageService';
 import websocketService from '../services/websocketService';
 import { useUserStore } from './userStore';
+import { useUnreadStore } from './unreadStore';
 import type { DirectConversation, DirectMessage, DirectRealtimeEvent, User } from '../types';
 
 const sortConversations = (items: DirectConversation[]) =>
@@ -37,6 +38,7 @@ export const useDirectMessageStore = defineStore('directMessage', () => {
   let realtimeInitialized = false;
 
   const userStore = useUserStore();
+  const unreadStore = useUnreadStore();
 
   const currentConversation = computed(() => {
     if (currentConversationId.value == null) {
@@ -100,6 +102,10 @@ export const useDirectMessageStore = defineStore('directMessage', () => {
       }
 
       upsertMessage(event.message);
+      if (event.type === 'MESSAGE_CREATED') {
+        unreadStore.initializeForUser(userStore.currentUser?.id);
+        unreadStore.markDirectUnread(event.message, currentConversationId.value, userStore.currentUser?.id);
+      }
     }
   };
 
@@ -156,6 +162,7 @@ export const useDirectMessageStore = defineStore('directMessage', () => {
 
     try {
       conversations.value = sortConversations(await directMessageService.getConversations());
+      unreadStore.syncDirectConversations(conversations.value, userStore.currentUser?.id);
       return conversations.value;
     } catch (err: any) {
       error.value =
@@ -213,6 +220,11 @@ export const useDirectMessageStore = defineStore('directMessage', () => {
     try {
       const fetchedMessages = await directMessageService.getMessages(conversationId, 'asc');
       messages.value[conversationId] = sortMessages(fetchedMessages.map(normalizeMessage));
+      unreadStore.initializeForUser(userStore.currentUser?.id);
+      unreadStore.markDirectRead(
+        conversationId,
+        fetchedMessages.reduce((maxId, message) => Math.max(maxId, message.id), 0)
+      );
       return messages.value[conversationId];
     } catch (err: any) {
       error.value =

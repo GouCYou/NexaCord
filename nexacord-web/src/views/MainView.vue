@@ -49,17 +49,34 @@
     <UserProfilePopover />
     <VoiceAudioSink />
 
-    <div v-if="incomingCall" class="call-toast">
-      <div>
-        <strong>{{ displayUserLabel(incomingCall.caller) }}</strong>
-        <span>邀请你语音通话</span>
-      </div>
-      <button class="call-accept" type="button" title="接听" @click="voiceStore.acceptIncomingCall">
-        接听
-      </button>
-      <button class="call-decline" type="button" title="拒绝" @click="voiceStore.declineIncomingCall">
-        拒绝
-      </button>
+    <div v-if="incomingCall" class="call-overlay">
+      <section class="incoming-call-card" role="dialog" aria-live="assertive">
+        <div class="incoming-call-avatar">
+          <img :src="incomingCall.caller.avatarUrl || defaultAvatarUrl" :alt="displayUserLabel(incomingCall.caller)" />
+        </div>
+        <div class="incoming-call-copy">
+          <span>好友来电</span>
+          <strong>{{ displayUserLabel(incomingCall.caller) }}</strong>
+          <p>邀请你进行语音通话</p>
+        </div>
+        <div class="incoming-call-actions">
+          <button class="call-accept" type="button" title="接听" @click="handleAcceptIncomingCall">
+            接听
+          </button>
+          <button class="call-decline" type="button" title="拒绝" @click="voiceStore.declineIncomingCall">
+            拒绝
+          </button>
+        </div>
+      </section>
+
+      <section v-if="showCallReplaceConfirm" class="call-confirm-card" role="alertdialog">
+        <strong>你已经在通话中</strong>
+        <p>接听 {{ displayUserLabel(incomingCall.caller) }} 的来电会自动断开当前语音连接。</p>
+        <div>
+          <button type="button" @click="showCallReplaceConfirm = false">取消</button>
+          <button class="danger-confirm" type="button" @click="confirmReplaceCurrentCall">断开并接听</button>
+        </div>
+      </section>
     </div>
 
     <div v-else-if="outgoingCall" class="call-toast">
@@ -90,7 +107,9 @@ import VoiceAudioSink from '../components/VoiceAudioSink.vue';
 import MemberSidebar from '../components/MemberSidebar.vue';
 import { useChannelStore } from '../stores/channelStore';
 import { useDirectMessageStore } from '../stores/directMessageStore';
+import { useMessageStore } from '../stores/messageStore';
 import { useServerStore } from '../stores/serverStore';
+import { useUnreadStore } from '../stores/unreadStore';
 import { useUserStore } from '../stores/userStore';
 import { useVoiceStore } from '../stores/voiceStore';
 import websocketService from '../services/websocketService';
@@ -102,13 +121,17 @@ const serverStore = useServerStore();
 const channelStore = useChannelStore();
 const userStore = useUserStore();
 const directMessageStore = useDirectMessageStore();
+const messageStore = useMessageStore();
+const unreadStore = useUnreadStore();
 const voiceStore = useVoiceStore();
 
 const { servers, currentServerId, currentServer, isLoading } = storeToRefs(serverStore);
 const { channels } = storeToRefs(channelStore);
 const { currentUser, isAuthenticated } = storeToRefs(userStore);
-const { incomingCall, outgoingCall } = storeToRefs(voiceStore);
+const { incomingCall, outgoingCall, isJoined } = storeToRefs(voiceStore);
 const showMemberSidebar = ref(true);
+const showCallReplaceConfirm = ref(false);
+const defaultAvatarUrl = '/logo.png';
 let routeSyncVersion = 0;
 
 const parseRouteId = (value: unknown): number | null => {
@@ -147,6 +170,22 @@ const dispatchCreateChannel = () => {
 
 const toggleMemberSidebar = () => {
   showMemberSidebar.value = !showMemberSidebar.value;
+};
+
+const handleAcceptIncomingCall = () => {
+  if (isJoined.value || outgoingCall.value) {
+    showCallReplaceConfirm.value = true;
+    return;
+  }
+
+  voiceStore.acceptIncomingCall();
+};
+
+const confirmReplaceCurrentCall = () => {
+  showCallReplaceConfirm.value = false;
+  voiceStore.cancelOutgoingCall();
+  voiceStore.leaveChannel();
+  voiceStore.acceptIncomingCall();
 };
 
 const getRouteServerId = () => parseRouteId(route.params.serverId);
@@ -233,7 +272,9 @@ const bootstrapWorkspace = async () => {
   }
 
   await userStore.refreshCurrentUser();
+  unreadStore.initializeForUser(currentUser.value?.id);
   directMessageStore.initializeRealtime();
+  messageStore.initializeRealtime();
   voiceStore.initializeRealtime();
   await serverStore.fetchServers(getRouteServerId() ?? undefined);
   await syncRouteState();
@@ -248,15 +289,32 @@ const handleServerRealtimeUpdate = (_event: unknown, payload: unknown) => {
   void serverStore.fetchServers(getRouteServerId() ?? undefined);
 };
 
+const handleChannelRealtimeUpdate = (_event: unknown, payload: unknown) => {
+  const update = payload as { serverId?: number };
+  const serverId = update?.serverId;
+  if (!serverId || serverId !== currentServerId.value) {
+    return;
+  }
+
+  void (async () => {
+    await channelStore.fetchChannels(serverId, getRouteChannelId() ?? undefined);
+    if (channelStore.currentChannelId && channelStore.currentChannelId !== getRouteChannelId()) {
+      router.replace(`/servers/${serverId}/channels/${channelStore.currentChannelId}`);
+    }
+  })();
+};
+
 onMounted(() => {
   window.addEventListener('nexacord:toggle-member-sidebar', toggleMemberSidebar);
   websocketService.on('server:update', handleServerRealtimeUpdate);
+  websocketService.on('channel:update', handleChannelRealtimeUpdate);
   void bootstrapWorkspace();
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('nexacord:toggle-member-sidebar', toggleMemberSidebar);
   websocketService.off('server:update', handleServerRealtimeUpdate);
+  websocketService.off('channel:update', handleChannelRealtimeUpdate);
 });
 
 watch(
@@ -265,6 +323,22 @@ watch(
     void syncRouteState();
   }
 );
+
+watch(
+  currentUser,
+  (user) => {
+    if (user?.id) {
+      unreadStore.initializeForUser(user.id);
+    } else {
+      unreadStore.reset();
+    }
+  },
+  { immediate: true }
+);
+
+watch(incomingCall, () => {
+  showCallReplaceConfirm.value = false;
+});
 </script>
 
 <style scoped>
@@ -358,6 +432,124 @@ watch(
 
 .server-empty-state .empty-state-kicker {
   color: #98a1ff;
+}
+
+.call-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: start center;
+  padding-top: 34px;
+  pointer-events: none;
+}
+
+.incoming-call-card,
+.call-confirm-card {
+  pointer-events: auto;
+  border: 1px solid var(--discord-strong-border);
+  background: color-mix(in srgb, var(--discord-elevated) 92%, transparent);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(20px);
+}
+
+.incoming-call-card {
+  width: min(420px, calc(100vw - 36px));
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 14px;
+  padding: 16px;
+  border-radius: 18px;
+}
+
+.incoming-call-avatar {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--discord-avatar-bg);
+}
+
+.incoming-call-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.incoming-call-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.incoming-call-copy span {
+  color: var(--discord-text-faint);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.incoming-call-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 20px;
+}
+
+.incoming-call-copy p {
+  margin: 0;
+  color: var(--discord-text-muted);
+  font-size: 13px;
+}
+
+.incoming-call-actions {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.incoming-call-actions button {
+  min-height: 40px;
+  border-radius: 10px;
+  color: white;
+  font-weight: 900;
+}
+
+.call-confirm-card {
+  width: min(420px, calc(100vw - 36px));
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 16px;
+  border-radius: 16px;
+}
+
+.call-confirm-card p {
+  margin: 0;
+  color: var(--discord-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.call-confirm-card div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.call-confirm-card button {
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: var(--discord-muted-surface);
+  color: var(--discord-text);
+  font-weight: 900;
+}
+
+.call-confirm-card .danger-confirm {
+  background: var(--discord-red);
+  color: white;
 }
 
 .call-toast {

@@ -17,4 +17,10 @@ const themeStore = useThemeStore();
 themeStore.initializeTheme();
 userStore.initializeUser();
 
+window.addEventListener('nexacord:auth-expired', () => {
+  if (router.currentRoute.value.name !== 'Login') {
+    void router.push('/login');
+  }
+});
+
 app.mount('#app');

@@ -2,7 +2,9 @@
   <div class="auth-shell">
     <div class="auth-card">
       <section class="brand-panel">
-        <div class="brand-mark">N</div>
+        <div class="brand-mark">
+          <img src="/logo.png" alt="Nexacord" />
+        </div>
         <span class="brand-kicker">Nexacord</span>
         <h1>回到你的频道和社区</h1>
         <p>继续你的频道、好友和实时语音。</p>
@@ -48,7 +50,13 @@
             />
           </label>
 
-          <button class="text-button" type="button" @click="authMode = 'reset'">忘记密码？</button>
+          <div class="login-options">
+            <label class="remember-me">
+              <input v-model="rememberMe" type="checkbox" />
+              <span>记住我</span>
+            </label>
+            <button class="text-button" type="button" @click="authMode = 'reset'">忘记密码？</button>
+          </div>
 
           <button class="primary-button" type="submit" :disabled="isLoading">
             {{ isLoading ? '登录中……' : '登录' }}
@@ -135,6 +143,7 @@ const loginForm = ref<LoginRequest>({
   usernameOrEmail: '',
   password: '',
 });
+const rememberMe = ref(authService.shouldRememberByDefault());
 
 const authMode = ref<'login' | 'reset'>('login');
 const isSendingCode = ref(false);
@@ -165,7 +174,7 @@ const canResetPassword = computed(
 const handleLogin = async () => {
   localError.value = '';
   localNotice.value = '';
-  const success = await userStore.login(loginForm.value);
+  const success = await userStore.login(loginForm.value, { rememberMe: rememberMe.value });
   if (!success) {
     return;
   }
@@ -358,6 +367,28 @@ const handleResetPassword = async () => {
   color: var(--discord-link-hover);
 }
 
+.login-options {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.remember-me {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #475569;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.remember-me input {
+  width: 16px;
+  height: 16px;
+  accent-color: #2563eb;
+}
+
 .error-message {
   padding: 12px 14px;
   border: 1px solid rgba(237, 66, 69, 0.3);
@@ -469,10 +500,14 @@ const handleResetPassword = async () => {
   display: grid;
   place-items: center;
   background: rgba(255, 255, 255, 0.12);
-  color: #ffffff;
-  font-size: 24px;
-  font-weight: 900;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  overflow: hidden;
+}
+
+.brand-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .brand-kicker {

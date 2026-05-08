@@ -2,6 +2,7 @@ import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
 import type { Channel } from '../types';
 import channelService from '../services/channelService';
+import { useUnreadStore } from './unreadStore';
 
 const normalizeChannel = (channel: Partial<Channel>): Channel => ({
   id: Number(channel.id),
@@ -16,6 +17,7 @@ const normalizeChannel = (channel: Partial<Channel>): Channel => ({
 });
 
 export const useChannelStore = defineStore('channel', () => {
+  const unreadStore = useUnreadStore();
   const channels = ref<Channel[]>([]);
   const currentChannelId = ref<number | null>(null);
   const isLoading = ref(false);
@@ -57,6 +59,7 @@ export const useChannelStore = defineStore('channel', () => {
     try {
       const fetchedChannels = await channelService.getServerChannels(serverId);
       channels.value = Array.isArray(fetchedChannels) ? fetchedChannels.map(normalizeChannel) : [];
+      unreadStore.registerChannels(channels.value, serverId);
       resolveCurrentChannel(preferredChannelId);
       return channels.value;
     } catch (err: any) {

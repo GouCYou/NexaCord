@@ -49,11 +49,11 @@
     <div v-if="isCurrentVoiceChannel" class="voice-mixer">
       <label>
         <span>麦克风 {{ inputVolume }}%</span>
-        <input type="range" min="0" max="200" :value="inputVolume" @input="setInputVolumeFromEvent" />
+        <input class="volume-range" type="range" min="0" max="200" :value="inputVolume" @input="setInputVolumeFromEvent" />
       </label>
       <label>
         <span>扬声器 {{ outputVolume }}%</span>
-        <input type="range" min="0" max="200" :value="outputVolume" @input="setOutputVolumeFromEvent" />
+        <input class="volume-range" type="range" min="0" max="200" :value="outputVolume" @input="setOutputVolumeFromEvent" />
       </label>
     </div>
 
@@ -75,6 +75,7 @@
           <span>{{ getUserVolume(participant.id) }}%</span>
           <input
             type="range"
+            class="volume-range"
             min="0"
             max="200"
             :value="getUserVolume(participant.id)"
@@ -334,9 +335,10 @@ button:disabled {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  padding: 12px;
-  border-radius: 8px;
-  background: var(--discord-surface);
+  padding: 14px;
+  border: 1px solid var(--discord-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--discord-surface) 78%, transparent);
 }
 
 .voice-mixer label,
@@ -351,7 +353,7 @@ button:disabled {
 .voice-mixer input,
 .user-volume input {
   width: 100%;
-  accent-color: var(--discord-brand);
+  accent-color: var(--discord-text-muted);
 }
 
 .voice-grid {
@@ -448,8 +450,12 @@ button:disabled {
 }
 
 .user-volume {
-  width: min(180px, 80%);
-  margin-top: 4px;
+  width: min(200px, 82%);
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--discord-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--discord-bg) 78%, transparent);
 }
 
 .voice-tile span {

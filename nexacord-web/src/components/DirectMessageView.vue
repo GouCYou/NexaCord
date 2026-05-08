@@ -81,6 +81,42 @@
               </div>
             </form>
 
+            <div v-else-if="invitePayload(message.content)" class="server-invite-card">
+              <div class="invite-icon">
+                <img
+                  v-if="invitePayload(message.content)?.serverIconUrl"
+                  :src="invitePayload(message.content)?.serverIconUrl || ''"
+                  :alt="invitePayload(message.content)?.serverName"
+                />
+                <ServerIcon v-else :size="24" aria-hidden="true" />
+              </div>
+              <div class="invite-copy">
+                <span>服务器邀请</span>
+                <strong>{{ invitePayload(message.content)?.serverName }}</strong>
+                <small>{{ inviteStateLabel(message) }}</small>
+              </div>
+              <div class="invite-actions">
+                <button
+                  class="invite-accept"
+                  type="button"
+                  :disabled="isInviteResolved(message)"
+                  @click="acceptInviteMessage(message)"
+                >
+                  <Check :size="15" aria-hidden="true" />
+                  <span>接受</span>
+                </button>
+                <button
+                  class="invite-decline"
+                  type="button"
+                  :disabled="isInviteResolved(message)"
+                  @click="declineInviteMessage(message)"
+                >
+                  <XCircle :size="15" aria-hidden="true" />
+                  <span>拒绝</span>
+                </button>
+              </div>
+            </div>
+
             <p v-else-if="message.content">{{ message.content }}</p>
 
             <div v-if="(message.attachments?.length ?? 0) > 0" class="attachments">
@@ -93,7 +129,7 @@
               />
             </div>
           </div>
-          <div v-if="message.author.id === currentUser?.id" class="message-actions">
+          <div v-if="message.author.id === currentUser?.id && !invitePayload(message.content)" class="message-actions">
             <button type="button" title="编辑消息" @click="startMessageEdit(message)">
               <Pencil :size="15" aria-hidden="true" />
             </button>
@@ -155,21 +191,25 @@ import { useRoute } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import dayjs from 'dayjs';
 import 'dayjs/locale/zh-cn';
-import { Paperclip, Pencil, PhoneCall, Send, Trash2, X } from 'lucide-vue-next';
+import { Check, Paperclip, Pencil, PhoneCall, Send, Server as ServerIcon, Trash2, X, XCircle } from 'lucide-vue-next';
 import ImageAttachment from './ImageAttachment.vue';
 import ImagePreviewModal from './ImagePreviewModal.vue';
 import fileService from '../services/fileService';
+import serverService from '../services/serverService';
 import type { DirectMessageCreateAttachment } from '../services/directMessageService';
 import { useDirectMessageStore } from '../stores/directMessageStore';
+import { useServerStore } from '../stores/serverStore';
 import { useUserStore } from '../stores/userStore';
 import { useVoiceStore } from '../stores/voiceStore';
 import type { Attachment, DirectMessage, User } from '../types';
+import { parseDirectInviteMessage } from '../utils/inviteMessage';
 import { displayUserLabel } from '../utils/userDisplay';
 
 dayjs.locale('zh-cn');
 
 const route = useRoute();
 const directMessageStore = useDirectMessageStore();
+const serverStore = useServerStore();
 const userStore = useUserStore();
 const voiceStore = useVoiceStore();
 const { currentUser } = storeToRefs(userStore);
@@ -186,6 +226,7 @@ const localError = ref<string | null>(null);
 const editingMessageId = ref<number | null>(null);
 const editingContent = ref('');
 const previewImageUrl = ref<string | null>(null);
+const inviteStates = ref<Record<string, 'accepted' | 'declined'>>({});
 const previewUrls = new Map<File, string>();
 
 const { outgoingCall } = storeToRefs(voiceStore);
@@ -217,6 +258,69 @@ const statusLabel = (status: User['status']) => {
   } as const;
 
   return labels[status] || '离线';
+};
+
+const inviteStorageKey = computed(() => `nexacord:invite-actions:${currentUser.value?.id || 'guest'}`);
+
+const loadInviteStates = () => {
+  try {
+    inviteStates.value = JSON.parse(localStorage.getItem(inviteStorageKey.value) || '{}') as Record<
+      string,
+      'accepted' | 'declined'
+    >;
+  } catch {
+    inviteStates.value = {};
+  }
+};
+
+const persistInviteStates = () => {
+  localStorage.setItem(inviteStorageKey.value, JSON.stringify(inviteStates.value));
+};
+
+const invitePayload = (content: string) => parseDirectInviteMessage(content);
+const inviteStateKey = (message: DirectMessage) => `${message.id}:${invitePayload(message.content)?.code || ''}`;
+const inviteState = (message: DirectMessage) => inviteStates.value[inviteStateKey(message)];
+const isInviteResolved = (message: DirectMessage) => Boolean(inviteState(message));
+const inviteStateLabel = (message: DirectMessage) => {
+  const state = inviteState(message);
+  if (state === 'accepted') {
+    return '你已接受这个邀请。';
+  }
+  if (state === 'declined') {
+    return '你已拒绝这个邀请。';
+  }
+  return '在私信中选择是否加入这个服务器。';
+};
+
+const setInviteState = (message: DirectMessage, state: 'accepted' | 'declined') => {
+  inviteStates.value = {
+    ...inviteStates.value,
+    [inviteStateKey(message)]: state,
+  };
+  persistInviteStates();
+};
+
+const acceptInviteMessage = async (message: DirectMessage) => {
+  const invite = invitePayload(message.content);
+  if (!invite || isInviteResolved(message)) {
+    return;
+  }
+
+  try {
+    await serverService.joinInvite(invite.code);
+    await serverStore.fetchServers(invite.serverId);
+    setInviteState(message, 'accepted');
+  } catch {
+    localError.value = '接受服务器邀请失败，这个邀请可能已经失效。';
+  }
+};
+
+const declineInviteMessage = (message: DirectMessage) => {
+  if (!invitePayload(message.content) || isInviteResolved(message)) {
+    return;
+  }
+
+  setInviteState(message, 'declined');
 };
 
 const formatTime = (time: string) => {
@@ -493,6 +597,7 @@ watch(draft, autoResizeComposer);
 onMounted(() => {
   voiceStore.initializeRealtime();
   directMessageStore.initializeRealtime();
+  loadInviteStates();
   autoResizeComposer();
   scrollToBottom();
 });
@@ -740,6 +845,93 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 10px;
+}
+
+.server-invite-card {
+  width: min(420px, 100%);
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 8px;
+  padding: 14px;
+  border: 1px solid var(--discord-border);
+  border-radius: 8px;
+  background: var(--discord-surface);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.08);
+}
+
+.invite-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #f2f3f5;
+  color: #1e1f22;
+}
+
+.invite-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.invite-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.invite-copy span {
+  color: var(--discord-text-faint);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.invite-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 17px;
+}
+
+.invite-copy small {
+  color: var(--discord-text-muted);
+  font-size: 12px;
+}
+
+.invite-actions {
+  grid-column: 2;
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.invite-actions button {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.invite-accept {
+  background: var(--discord-green);
+  color: white;
+}
+
+.invite-decline {
+  background: var(--discord-muted-surface);
+  color: var(--discord-text);
+}
+
+.invite-actions button:disabled {
+  opacity: 0.54;
 }
 
 .message-actions {

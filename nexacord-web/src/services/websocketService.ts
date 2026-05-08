@@ -25,6 +25,13 @@ class WebSocketService {
   private handlers = new Map<WebSocketEvent, Set<WebSocketEventHandler>>();
 
   public initialize(token: string): void {
+    if (this.client) {
+      this.client.connectHeaders = {
+        ...this.client.connectHeaders,
+        Authorization: `Bearer ${token}`,
+      };
+    }
+
     if (this.client?.active) {
       return;
     }
@@ -56,6 +63,18 @@ class WebSocketService {
     });
 
     this.client.activate();
+  }
+
+  public updateToken(token: string): void {
+    if (!this.client) {
+      this.initialize(token);
+      return;
+    }
+
+    this.client.connectHeaders = {
+      ...this.client.connectHeaders,
+      Authorization: `Bearer ${token}`,
+    };
   }
 
   public disconnect(): void {

@@ -59,6 +59,7 @@ export interface Channel {
   server?: {
     id: number;
     name: string;
+    iconUrl?: string | null;
   };
 }
 
@@ -68,7 +69,7 @@ export interface Message {
   createdAt: string;
   updatedAt: string;
   author: User;
-  channel: { id: number; name: string };
+  channel: { id: number; name: string; server?: { id: number; name: string; iconUrl?: string | null } };
   attachments?: Attachment[];
   edited: boolean;
   deleted: boolean;

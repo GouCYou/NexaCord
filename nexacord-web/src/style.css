@@ -28,6 +28,7 @@
   --discord-link-hover: #7b86ff;
   --discord-scrollbar: rgba(17, 18, 20, 0.72);
   --discord-scrollbar-hover: rgba(17, 18, 20, 0.9);
+  --discord-avatar-bg: #2b2d31;
   font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', sans-serif;
   color: var(--discord-text);
   background: var(--discord-bg);
@@ -67,6 +68,7 @@
   --discord-link-hover: #4752c4;
   --discord-scrollbar: rgba(79, 84, 92, 0.32);
   --discord-scrollbar-hover: rgba(79, 84, 92, 0.48);
+  --discord-avatar-bg: #e3e5e8;
 }
 
 * {
@@ -112,6 +114,38 @@ img {
   display: block;
 }
 
+.avatar,
+.dm-avatar,
+.direct-avatar,
+.friend-avatar,
+.member-avatar,
+.message-avatar,
+.popover-avatar,
+.user-avatar,
+.voice-avatar,
+.voice-member-avatar,
+.welcome-avatar {
+  background: var(--discord-avatar-bg) !important;
+}
+
+.avatar img,
+.dm-avatar img,
+.direct-avatar img,
+.friend-avatar img,
+.member-avatar img,
+.message-avatar img,
+.popover-avatar img,
+.user-avatar img,
+.voice-avatar img,
+.voice-member-avatar img,
+.welcome-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: var(--discord-avatar-bg);
+}
+
 button,
 input,
 textarea,
@@ -130,6 +164,45 @@ textarea:focus-visible,
 select:focus-visible {
   outline: 2px solid rgba(88, 101, 242, 0.65);
   outline-offset: 1px;
+}
+
+.volume-range {
+  height: 18px;
+  appearance: none;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.volume-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--discord-text-muted) 42%, transparent);
+}
+
+.volume-range::-webkit-slider-thumb {
+  width: 18px;
+  height: 18px;
+  margin-top: -7px;
+  appearance: none;
+  border: 3px solid var(--discord-elevated);
+  border-radius: 50%;
+  background: var(--discord-text);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.26);
+}
+
+.volume-range::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--discord-text-muted) 42%, transparent);
+}
+
+.volume-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 3px solid var(--discord-elevated);
+  border-radius: 50%;
+  background: var(--discord-text);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.26);
 }
 
 ::-webkit-scrollbar {

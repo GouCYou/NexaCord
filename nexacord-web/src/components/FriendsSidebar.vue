@@ -43,6 +43,7 @@
           <strong>{{ displayNameOf(conversation.otherUser) }}</strong>
           <small>{{ lastMessagePreview(conversation) }}</small>
         </span>
+        <span v-if="hasDirectUnread(conversation.id)" class="dm-red-dot" aria-hidden="true"></span>
       </button>
     </div>
 
@@ -57,9 +58,11 @@ import { storeToRefs } from 'pinia';
 import { Inbox, Search, UserPlus, Users } from 'lucide-vue-next';
 import UserControlPanel from './UserControlPanel.vue';
 import { useDirectMessageStore } from '../stores/directMessageStore';
+import { useUnreadStore } from '../stores/unreadStore';
 import { useUserStore } from '../stores/userStore';
 import { useVoiceStore } from '../stores/voiceStore';
 import type { DirectConversation, User } from '../types';
+import { parseDirectInviteMessage } from '../utils/inviteMessage';
 import { displayUserLabel } from '../utils/userDisplay';
 
 const route = useRoute();
@@ -67,7 +70,9 @@ const router = useRouter();
 const userStore = useUserStore();
 const voiceStore = useVoiceStore();
 const directMessageStore = useDirectMessageStore();
+const unreadStore = useUnreadStore();
 const { conversations, currentConversationId, isLoading } = storeToRefs(directMessageStore);
+const { hasDirectUnread, markDirectRead } = unreadStore;
 
 const defaultAvatarUrl = '/logo.png';
 const searchQuery = ref('');
@@ -136,11 +141,16 @@ const lastMessagePreview = (conversation: DirectConversation) => {
     return statusLabel(conversation.otherUser.status);
   }
 
+  if (parseDirectInviteMessage(conversation.lastMessage.content)) {
+    return '[服务器邀请]';
+  }
+
   return conversation.lastMessage.content || '[图片]';
 };
 
 const openConversation = (conversationId: number) => {
   activeHomeTarget.value = 'friends';
+  markDirectRead(conversationId);
   router.push(`/direct/${conversationId}`);
 };
 
@@ -271,6 +281,7 @@ onMounted(() => {
 }
 
 .dm-item {
+  position: relative;
   min-width: 0;
   min-height: 44px;
   display: grid;
@@ -282,6 +293,17 @@ onMounted(() => {
   background: transparent;
   color: var(--discord-text-muted);
   text-align: left;
+}
+
+.dm-red-dot {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--discord-red);
+  transform: translateY(-50%);
 }
 
 .dm-item:hover,

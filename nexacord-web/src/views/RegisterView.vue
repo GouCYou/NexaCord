@@ -2,7 +2,9 @@
   <div class="auth-shell">
     <div class="auth-card">
       <section class="brand-panel">
-        <div class="brand-mark">N</div>
+        <div class="brand-mark">
+          <img src="/logo.png" alt="Nexacord" />
+        </div>
         <span class="brand-kicker">Nexacord</span>
         <h1>建立属于你的实时交流社区</h1>
         <p>创建账号后即可进入频道、好友和语音空间。</p>
@@ -456,10 +458,14 @@ const handleRegister = async () => {
   display: grid;
   place-items: center;
   background: rgba(255, 255, 255, 0.12);
-  color: #ffffff;
-  font-size: 24px;
-  font-weight: 900;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  overflow: hidden;
+}
+
+.brand-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .brand-kicker {

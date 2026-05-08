@@ -70,6 +70,7 @@ const openUserPopover = (member: Member, event: MouseEvent) => {
   window.dispatchEvent(new CustomEvent('nexacord:open-user-popover', {
     detail: {
       user: member.user,
+      memberId: member.id,
       role: member.role,
       serverName: serverStore.currentServer?.name,
       serverIconUrl: serverStore.currentServer?.iconUrl,
