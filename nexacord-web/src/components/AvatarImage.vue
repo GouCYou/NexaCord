@@ -36,8 +36,15 @@ async function loadAvatar() {
   const currentLoadId = ++loadId;
   await nextTick();
 
+  loadImage(currentLoadId, shouldTryCors(resolvedSrc.value));
+}
+
+function loadImage(currentLoadId: number, tryCors: boolean) {
   const image = new Image();
   image.decoding = 'async';
+  if (tryCors) {
+    image.crossOrigin = 'anonymous';
+  }
   image.onload = () => {
     if (currentLoadId !== loadId) {
       return;
@@ -45,8 +52,27 @@ async function loadAvatar() {
 
     drawAvatar(image);
   };
-  image.onerror = retryLoad;
+  image.onerror = () => {
+    if (tryCors) {
+      loadImage(currentLoadId, false);
+      return;
+    }
+
+    retryLoad();
+  };
   image.src = resolvedSrc.value;
+}
+
+function shouldTryCors(src: string) {
+  if (!src.startsWith('http')) {
+    return false;
+  }
+
+  try {
+    return new URL(src).origin !== window.location.origin;
+  } catch {
+    return false;
+  }
 }
 
 function drawAvatar(image: HTMLImageElement) {
@@ -72,25 +98,83 @@ function drawAvatar(image: HTMLImageElement) {
   context.fillStyle = '#eef2f7';
   context.fillRect(0, 0, size, size);
 
-  context.filter = 'blur(12px) saturate(1.12)';
-  drawCover(context, image, size, 1.8);
-  context.filter = 'none';
-  drawCover(context, image, size, 1.28);
+  const visibleBounds = getVisibleBounds(image);
+  drawCover(context, image, visibleBounds, size, 1);
   context.restore();
 }
 
 function drawCover(
   context: CanvasRenderingContext2D,
   image: HTMLImageElement,
+  sourceBounds: SourceBounds | null,
   size: number,
   scaleMultiplier: number
 ) {
-  const imageScale = Math.max(size / image.naturalWidth, size / image.naturalHeight) * scaleMultiplier;
-  const width = image.naturalWidth * imageScale;
-  const height = image.naturalHeight * imageScale;
+  const bounds = sourceBounds ?? {
+    x: 0,
+    y: 0,
+    width: image.naturalWidth,
+    height: image.naturalHeight,
+  };
+  const imageScale = Math.max(size / bounds.width, size / bounds.height) * scaleMultiplier;
+  const width = bounds.width * imageScale;
+  const height = bounds.height * imageScale;
   const x = (size - width) / 2;
   const y = (size - height) / 2;
-  context.drawImage(image, x, y, width, height);
+  context.drawImage(image, bounds.x, bounds.y, bounds.width, bounds.height, x, y, width, height);
+}
+
+function getVisibleBounds(image: HTMLImageElement): SourceBounds | null {
+  const maxScanSize = 256;
+  const scale = Math.min(1, maxScanSize / Math.max(image.naturalWidth, image.naturalHeight));
+  const width = Math.max(1, Math.round(image.naturalWidth * scale));
+  const height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const scanCanvas = document.createElement('canvas');
+  scanCanvas.width = width;
+  scanCanvas.height = height;
+  const scanContext = scanCanvas.getContext('2d', { willReadFrequently: true });
+  if (!scanContext) {
+    return null;
+  }
+
+  try {
+    scanContext.drawImage(image, 0, 0, width, height);
+    const pixels = scanContext.getImageData(0, 0, width, height).data;
+    let minX = width;
+    let minY = height;
+    let maxX = -1;
+    let maxY = -1;
+
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const alpha = pixels[(y * width + x) * 4 + 3] ?? 0;
+        if (alpha <= 12) {
+          continue;
+        }
+
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    }
+
+    if (maxX < minX || maxY < minY) {
+      return null;
+    }
+
+    const padding = 2;
+    const sourceX = Math.max(0, (minX - padding) / scale);
+    const sourceY = Math.max(0, (minY - padding) / scale);
+    return {
+      x: sourceX,
+      y: sourceY,
+      width: Math.min(image.naturalWidth - sourceX, (maxX - minX + 1 + padding * 2) / scale),
+      height: Math.min(image.naturalHeight - sourceY, (maxY - minY + 1 + padding * 2) / scale),
+    };
+  } catch {
+    return null;
+  }
 }
 
 function retryLoad() {
@@ -116,6 +200,15 @@ watch(
   },
   { immediate: true }
 );
+</script>
+
+<script lang="ts">
+type SourceBounds = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
 </script>
 
 <style scoped>
