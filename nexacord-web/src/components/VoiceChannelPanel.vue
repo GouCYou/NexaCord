@@ -56,10 +56,10 @@
         @click="openUserPopover(participant, $event)"
       >
         <button
-          v-if="isCurrentVoiceChannel && participant.id !== currentUser?.id"
+          v-if="isCurrentVoiceChannel"
           class="voice-volume-button"
           type="button"
-          title="调节这个成员的音量"
+          :title="participant.id === currentUser?.id ? '调节自己的麦克风音量' : '调节这个成员的音量'"
           @click.stop="toggleUserVolumeMenu(participant.id)"
         >
           <Volume2 :size="17" aria-hidden="true" />
@@ -70,14 +70,14 @@
           @click.stop
         >
           <label>
-            <span>{{ displayNameOf(participant) }} {{ getUserVolume(participant.id) }}%</span>
+            <span>{{ volumeLabel(participant) }} {{ getTileVolume(participant) }}%</span>
             <input
               type="range"
               class="volume-range"
               min="0"
               max="200"
-              :value="getUserVolume(participant.id)"
-              @input="setUserVolumeFromEvent(participant.id, $event)"
+              :value="getTileVolume(participant)"
+              @input="setTileVolumeFromEvent(participant, $event)"
             />
           </label>
         </div>
@@ -121,6 +121,7 @@ const {
   isConnecting,
   isMuted,
   isDeafened,
+  inputVolume,
   voiceError,
   visibleParticipants,
   selfVoiceStatus,
@@ -136,6 +137,7 @@ const {
   leaveChannel,
   toggleMute,
   toggleDeafen,
+  setInputVolume,
   setUserVolume,
 } = voiceStore;
 const defaultAvatarUrl = '/logo.png';
@@ -196,8 +198,20 @@ const toggleUserVolumeMenu = (userId: number) => {
   volumeMenuUserId.value = volumeMenuUserId.value === userId ? null : userId;
 };
 
-const setUserVolumeFromEvent = (userId: number, event: Event) => {
-  setUserVolume(userId, Number((event.target as HTMLInputElement).value));
+const getTileVolume = (participant: VoiceUser) =>
+  participant.id === currentUser.value?.id ? inputVolume.value : getUserVolume(participant.id);
+
+const volumeLabel = (participant: VoiceUser) =>
+  participant.id === currentUser.value?.id ? '我的麦克风' : displayNameOf(participant);
+
+const setTileVolumeFromEvent = (participant: VoiceUser, event: Event) => {
+  const value = Number((event.target as HTMLInputElement).value);
+  if (participant.id === currentUser.value?.id) {
+    setInputVolume(value);
+    return;
+  }
+
+  setUserVolume(participant.id, value);
 };
 
 const disconnectVoice = () => {

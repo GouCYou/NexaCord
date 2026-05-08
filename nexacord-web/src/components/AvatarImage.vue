@@ -32,20 +32,7 @@ const resolvedSrc = computed(() => {
   return `${baseSrc.value}${separator}avatarRetry=${reloadToken.value}`;
 });
 
-watch(baseSrc, () => {
-  retryCount.value = 0;
-  reloadToken.value = 0;
-});
-
-watch(
-  resolvedSrc,
-  () => {
-    void loadAvatar();
-  },
-  { immediate: true }
-);
-
-const loadAvatar = async () => {
+async function loadAvatar() {
   const currentLoadId = ++loadId;
   await nextTick();
 
@@ -60,9 +47,9 @@ const loadAvatar = async () => {
   };
   image.onerror = retryLoad;
   image.src = resolvedSrc.value;
-};
+}
 
-const drawAvatar = (image: HTMLImageElement) => {
+function drawAvatar(image: HTMLImageElement) {
   const canvas = canvasRef.value;
   if (!canvas || !image.naturalWidth || !image.naturalHeight) {
     return;
@@ -90,23 +77,23 @@ const drawAvatar = (image: HTMLImageElement) => {
   context.filter = 'none';
   drawCover(context, image, size, 1.28);
   context.restore();
-};
+}
 
-const drawCover = (
+function drawCover(
   context: CanvasRenderingContext2D,
   image: HTMLImageElement,
   size: number,
   scaleMultiplier: number
-) => {
+) {
   const imageScale = Math.max(size / image.naturalWidth, size / image.naturalHeight) * scaleMultiplier;
   const width = image.naturalWidth * imageScale;
   const height = image.naturalHeight * imageScale;
   const x = (size - width) / 2;
   const y = (size - height) / 2;
   context.drawImage(image, x, y, width, height);
-};
+}
 
-const retryLoad = () => {
+function retryLoad() {
   if (retryCount.value >= 3) {
     return;
   }
@@ -115,7 +102,20 @@ const retryLoad = () => {
   window.setTimeout(() => {
     reloadToken.value = Date.now();
   }, 450 * retryCount.value);
-};
+}
+
+watch(baseSrc, () => {
+  retryCount.value = 0;
+  reloadToken.value = 0;
+});
+
+watch(
+  resolvedSrc,
+  () => {
+    void loadAvatar();
+  },
+  { immediate: true }
+);
 </script>
 
 <style scoped>
