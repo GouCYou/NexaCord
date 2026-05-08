@@ -1,15 +1,12 @@
 package cn.cctstudio.nexacord.dto;
 
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
-import java.util.ArrayList;
-import java.util.List;
-
 @Data
-public class DirectMessageCreateRequest {
+public class DirectMessageUpdateRequest {
+    @NotBlank(message = "消息内容不能为空。")
     @Size(max = 4000, message = "消息内容不能超过 4000 个字符。")
     private String content;
-
-    private List<DirectAttachmentRequest> attachments = new ArrayList<>();
 }

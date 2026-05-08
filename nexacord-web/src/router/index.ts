@@ -1,5 +1,16 @@
-import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router';
+import { createMemoryHistory, createRouter, type RouteRecordRaw } from 'vue-router';
 import authService from '../services/authService';
+import DirectMessageView from '../components/DirectMessageView.vue';
+import FriendsHome from '../components/FriendsHome.vue';
+import MessageList from '../components/MessageList.vue';
+import InviteView from '../views/InviteView.vue';
+import LoginView from '../views/LoginView.vue';
+import MainView from '../views/MainView.vue';
+import RegisterView from '../views/RegisterView.vue';
+
+if (window.location.pathname !== '/') {
+  window.history.replaceState(window.history.state, '', '/');
+}
 
 const EmptyWorkspace = {
   template: '<div></div>',
@@ -9,19 +20,19 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/',
     name: 'Main',
-    component: () => import('../views/MainView.vue'),
+    component: MainView,
     meta: { requiresAuth: true },
     children: [
       {
         path: '',
         name: 'Friends',
-        component: () => import('../components/FriendsHome.vue'),
+        component: FriendsHome,
         meta: { requiresAuth: true },
       },
       {
         path: '/direct/:conversationId',
         name: 'DirectConversation',
-        component: () => import('../components/DirectMessageView.vue'),
+        component: DirectMessageView,
         meta: { requiresAuth: true },
       },
       {
@@ -33,7 +44,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: '/servers/:serverId/channels/:channelId',
         name: 'Channel',
-        component: () => import('../components/MessageList.vue'),
+        component: MessageList,
         meta: { requiresAuth: true },
       },
     ],
@@ -41,19 +52,19 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/login',
     name: 'Login',
-    component: () => import('../views/LoginView.vue'),
+    component: LoginView,
     meta: { requiresAuth: false },
   },
   {
     path: '/register',
     name: 'Register',
-    component: () => import('../views/RegisterView.vue'),
+    component: RegisterView,
     meta: { requiresAuth: false },
   },
   {
     path: '/invite/:code',
     name: 'Invite',
-    component: () => import('../views/InviteView.vue'),
+    component: InviteView,
     meta: { requiresAuth: true },
   },
   {
@@ -75,7 +86,7 @@ const routes: RouteRecordRaw[] = [
 ];
 
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
+  history: createMemoryHistory(import.meta.env.BASE_URL),
   routes,
 });
 

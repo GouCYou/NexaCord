@@ -41,7 +41,7 @@
         </span>
         <span class="dm-copy">
           <strong>{{ displayNameOf(conversation.otherUser) }}</strong>
-          <small>{{ conversation.lastMessage?.content || statusLabel(conversation.otherUser.status) }}</small>
+          <small>{{ lastMessagePreview(conversation) }}</small>
         </span>
       </button>
     </div>
@@ -59,7 +59,7 @@ import UserControlPanel from './UserControlPanel.vue';
 import { useDirectMessageStore } from '../stores/directMessageStore';
 import { useUserStore } from '../stores/userStore';
 import { useVoiceStore } from '../stores/voiceStore';
-import type { User } from '../types';
+import type { DirectConversation, User } from '../types';
 import { displayUserLabel } from '../utils/userDisplay';
 
 const route = useRoute();
@@ -129,6 +129,14 @@ const statusLabel = (status: User['status']) => {
   } as const;
 
   return labels[status] || '离线';
+};
+
+const lastMessagePreview = (conversation: DirectConversation) => {
+  if (!conversation.lastMessage) {
+    return statusLabel(conversation.otherUser.status);
+  }
+
+  return conversation.lastMessage.content || '[图片]';
 };
 
 const openConversation = (conversationId: number) => {

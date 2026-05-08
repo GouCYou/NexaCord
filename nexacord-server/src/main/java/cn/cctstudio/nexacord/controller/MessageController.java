@@ -1,5 +1,7 @@
 package cn.cctstudio.nexacord.controller;
 
+import cn.cctstudio.nexacord.exception.BadRequestException;
+import cn.cctstudio.nexacord.model.Attachment;
 import cn.cctstudio.nexacord.model.Channel;
 import cn.cctstudio.nexacord.model.Message;
 import cn.cctstudio.nexacord.model.User;
@@ -28,6 +30,9 @@ public class MessageController {
             @RequestBody Message message,
             @AuthenticationPrincipal User currentUser) {
         Channel channel = channelService.getChannelById(channelId);
+        if (message.getAttachments() != null) {
+            message.getAttachments().forEach(MessageController::validateImageAttachment);
+        }
         Message createdMessage = messageService.createMessage(message, channel, currentUser);
         messagingTemplate.convertAndSend("/topic/messages/new", createdMessage);
         return new ResponseEntity<>(createdMessage, HttpStatus.CREATED);
@@ -80,5 +85,15 @@ public class MessageController {
         messageService.deleteMessage(messageId);
         messagingTemplate.convertAndSend("/topic/messages/delete", messageId);
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
+    }
+
+    private static void validateImageAttachment(Attachment attachment) {
+        String fileType = attachment.getFileType();
+        String url = attachment.getUrl();
+        boolean imageContentType = fileType != null && fileType.toLowerCase().startsWith("image/");
+        boolean imageUrl = url != null && url.toLowerCase().matches(".*\\.(png|jpe?g|gif|webp|avif|svg)(\\?.*)?$");
+        if (!imageContentType && !imageUrl) {
+            throw new BadRequestException("当前只支持发送图片。");
+        }
     }
 }

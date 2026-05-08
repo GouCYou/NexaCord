@@ -89,6 +89,7 @@ export interface LoginRequest {
 
 export interface RegisterRequest {
   username: string;
+  displayName?: string;
   email: string;
   password: string;
   verificationCode: string;
@@ -140,6 +141,7 @@ export interface DirectMessage {
   updatedAt: string;
   edited: boolean;
   deleted: boolean;
+  attachments?: Attachment[];
 }
 
 export interface DirectConversation {
@@ -151,7 +153,7 @@ export interface DirectConversation {
 }
 
 export interface DirectRealtimeEvent {
-  type: 'CONVERSATION_UPDATED' | 'MESSAGE_CREATED';
+  type: 'CONVERSATION_UPDATED' | 'MESSAGE_CREATED' | 'MESSAGE_UPDATED' | 'MESSAGE_DELETED';
   conversation: DirectConversation;
   message: DirectMessage | null;
 }

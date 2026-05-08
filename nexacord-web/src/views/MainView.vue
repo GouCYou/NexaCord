@@ -48,6 +48,29 @@
     <ServerSettingsModal />
     <UserProfilePopover />
     <VoiceAudioSink />
+
+    <div v-if="incomingCall" class="call-toast">
+      <div>
+        <strong>{{ displayUserLabel(incomingCall.caller) }}</strong>
+        <span>邀请你语音通话</span>
+      </div>
+      <button class="call-accept" type="button" title="接听" @click="voiceStore.acceptIncomingCall">
+        接听
+      </button>
+      <button class="call-decline" type="button" title="拒绝" @click="voiceStore.declineIncomingCall">
+        拒绝
+      </button>
+    </div>
+
+    <div v-else-if="outgoingCall" class="call-toast">
+      <div>
+        <strong>{{ displayUserLabel(outgoingCall.callee) }}</strong>
+        <span>等待对方接听……</span>
+      </div>
+      <button class="call-decline" type="button" title="取消呼叫" @click="voiceStore.cancelOutgoingCall">
+        取消
+      </button>
+    </div>
   </div>
 </template>
 
@@ -69,7 +92,9 @@ import { useChannelStore } from '../stores/channelStore';
 import { useDirectMessageStore } from '../stores/directMessageStore';
 import { useServerStore } from '../stores/serverStore';
 import { useUserStore } from '../stores/userStore';
+import { useVoiceStore } from '../stores/voiceStore';
 import websocketService from '../services/websocketService';
+import { displayUserLabel } from '../utils/userDisplay';
 
 const route = useRoute();
 const router = useRouter();
@@ -77,10 +102,12 @@ const serverStore = useServerStore();
 const channelStore = useChannelStore();
 const userStore = useUserStore();
 const directMessageStore = useDirectMessageStore();
+const voiceStore = useVoiceStore();
 
 const { servers, currentServerId, currentServer, isLoading } = storeToRefs(serverStore);
 const { channels } = storeToRefs(channelStore);
 const { currentUser, isAuthenticated } = storeToRefs(userStore);
+const { incomingCall, outgoingCall } = storeToRefs(voiceStore);
 const showMemberSidebar = ref(true);
 let routeSyncVersion = 0;
 
@@ -207,6 +234,7 @@ const bootstrapWorkspace = async () => {
 
   await userStore.refreshCurrentUser();
   directMessageStore.initializeRealtime();
+  voiceStore.initializeRealtime();
   await serverStore.fetchServers(getRouteServerId() ?? undefined);
   await syncRouteState();
 };
@@ -330,6 +358,57 @@ watch(
 
 .server-empty-state .empty-state-kicker {
   color: #98a1ff;
+}
+
+.call-toast {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 70;
+  min-width: 320px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--discord-border);
+  border-radius: 12px;
+  background: var(--discord-elevated);
+  box-shadow: var(--discord-shadow);
+}
+
+.call-toast div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.call-toast strong,
+.call-toast span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.call-toast span {
+  color: var(--discord-text-faint);
+  font-size: 13px;
+}
+
+.call-toast button {
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 8px;
+  color: white;
+  font-weight: 900;
+}
+
+.call-accept {
+  background: var(--discord-green);
+}
+
+.call-decline {
+  background: var(--discord-red);
 }
 
 @media (max-width: 960px) {

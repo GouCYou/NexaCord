@@ -32,7 +32,7 @@
     >
       <button
         class="server-button"
-        :class="{ active: currentServerId === server.id }"
+        :class="{ active: currentServerId === server.id, 'default-server': !server.iconUrl }"
         :aria-label="server.name"
         type="button"
         @click="selectServer(server.id)"
@@ -261,12 +261,19 @@ onBeforeUnmount(() => {
 .server-button:hover {
   border-radius: 16px;
   background: var(--discord-brand);
+  color: white;
   transform: translateY(-1px);
 }
 
 .server-button.active {
   border-radius: 16px;
   background: var(--discord-brand);
+  color: white;
+}
+
+.server-button.default-server:not(.active):not(:hover) {
+  background: #f2f3f5;
+  color: #1e1f22;
 }
 
 .add-server {

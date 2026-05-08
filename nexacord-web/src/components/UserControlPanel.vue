@@ -18,9 +18,20 @@
           <VolumeX v-if="isDeafened" :size="18" aria-hidden="true" />
           <Headphones v-else :size="18" aria-hidden="true" />
         </button>
-        <button class="voice-action danger" type="button" title="断开语音" @click="leaveChannel">
+        <button class="voice-action danger" type="button" title="断开语音" @click="disconnectVoice">
           <PhoneOff :size="18" aria-hidden="true" />
         </button>
+      </div>
+
+      <div class="voice-sliders">
+        <label>
+          <span>麦克风 {{ inputVolume }}%</span>
+          <input type="range" min="0" max="200" :value="inputVolume" @input="setInputVolumeFromEvent" />
+        </label>
+        <label>
+          <span>扬声器 {{ outputVolume }}%</span>
+          <input type="range" min="0" max="200" :value="outputVolume" @input="setOutputVolumeFromEvent" />
+        </label>
       </div>
     </section>
 
@@ -121,8 +132,8 @@ const userStore = useUserStore();
 const voiceStore = useVoiceStore();
 const { currentUser } = storeToRefs(userStore);
 const { isLight } = storeToRefs(themeStore);
-const { activeChannelName, activeServerName, isJoined, isMuted, isDeafened } = storeToRefs(voiceStore);
-const { leaveChannel, toggleMute, toggleDeafen } = voiceStore;
+const { activeChannelName, activeServerName, isJoined, isMuted, isDeafened, inputVolume, outputVolume } = storeToRefs(voiceStore);
+const { leaveChannel, toggleMute, toggleDeafen, setInputVolume, setOutputVolume } = voiceStore;
 const showStatusMenu = ref(false);
 const showAccountMenu = ref(false);
 const defaultAvatarUrl = '/logo.png';
@@ -181,6 +192,18 @@ const switchAccount = () => {
 const closeMenus = () => {
   showStatusMenu.value = false;
   showAccountMenu.value = false;
+};
+
+const setInputVolumeFromEvent = (event: Event) => {
+  setInputVolume(Number((event.target as HTMLInputElement).value));
+};
+
+const setOutputVolumeFromEvent = (event: Event) => {
+  setOutputVolume(Number((event.target as HTMLInputElement).value));
+};
+
+const disconnectVoice = () => {
+  leaveChannel();
 };
 
 onMounted(() => {
@@ -250,6 +273,24 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 6px;
+}
+
+.voice-sliders {
+  display: grid;
+  gap: 8px;
+}
+
+.voice-sliders label {
+  display: grid;
+  gap: 5px;
+  color: var(--discord-text-faint);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.voice-sliders input {
+  width: 100%;
+  accent-color: var(--discord-brand);
 }
 
 .voice-action {
@@ -322,8 +363,8 @@ onBeforeUnmount(() => {
 }
 
 .status-dot {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: var(--discord-green);
 }
@@ -332,7 +373,7 @@ onBeforeUnmount(() => {
   position: absolute;
   right: -1px;
   bottom: -1px;
-  border: 3px solid var(--discord-surface-soft);
+  border: 2px solid var(--discord-surface-soft);
   box-sizing: content-box;
 }
 
@@ -345,8 +386,7 @@ onBeforeUnmount(() => {
 }
 
 .status-dot.offline {
-  background: transparent;
-  border: 3px solid var(--discord-text-faint);
+  background: #80848e;
 }
 
 .user-meta {

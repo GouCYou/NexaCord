@@ -108,6 +108,10 @@ a:hover {
   color: var(--discord-link-hover);
 }
 
+img {
+  display: block;
+}
+
 button,
 input,
 textarea,

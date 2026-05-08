@@ -5,6 +5,7 @@ SET FOREIGN_KEY_CHECKS = 0;
 
 -- 如果表已存在则先删除
 DROP TABLE IF EXISTS attachments;
+DROP TABLE IF EXISTS direct_attachments;
 DROP TABLE IF EXISTS server_invites;
 DROP TABLE IF EXISTS direct_messages;
 DROP TABLE IF EXISTS direct_conversations;
@@ -150,6 +151,17 @@ CREATE TABLE attachments (
     FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
 );
 
+-- 创建私聊附件表
+CREATE TABLE direct_attachments (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    file_name VARCHAR(255) NOT NULL,
+    file_type VARCHAR(100),
+    file_size BIGINT,
+    url VARCHAR(255) NOT NULL,
+    direct_message_id BIGINT NOT NULL,
+    FOREIGN KEY (direct_message_id) REFERENCES direct_messages(id) ON DELETE CASCADE
+);
+
 -- 创建索引以提升查询性能
 CREATE INDEX idx_users_username ON users(username);
 CREATE INDEX idx_users_email ON users(email);
@@ -167,6 +179,7 @@ CREATE INDEX idx_direct_messages_conversation ON direct_messages(conversation_id
 CREATE INDEX idx_direct_messages_author ON direct_messages(author_id);
 CREATE INDEX idx_server_invites_code ON server_invites(code);
 CREATE INDEX idx_attachments_message_id ON attachments(message_id);
+CREATE INDEX idx_direct_attachments_message_id ON direct_attachments(direct_message_id);
 
 -- 写入可选的初始化数据
 INSERT INTO users (username, display_name, email, password, status) VALUES

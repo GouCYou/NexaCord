@@ -12,20 +12,38 @@ import java.util.Optional;
 @Repository
 public interface DirectMessageRepository extends JpaRepository<DirectMessage, Long> {
     @Query("""
-            select message from DirectMessage message
+            select distinct message from DirectMessage message
             join fetch message.author
+            left join fetch message.attachments
             where message.conversation.id = :conversationId and (message.deleted is null or message.deleted = false)
             order by message.createdAt asc
             """)
     List<DirectMessage> findVisibleByConversationIdOrderByCreatedAtAsc(@Param("conversationId") Long conversationId);
 
     @Query("""
-            select message from DirectMessage message
+            select distinct message from DirectMessage message
             join fetch message.author
+            left join fetch message.attachments
             where message.conversation.id = :conversationId and (message.deleted is null or message.deleted = false)
             order by message.createdAt desc
             """)
     List<DirectMessage> findVisibleByConversationIdOrderByCreatedAtDesc(@Param("conversationId") Long conversationId);
 
-    Optional<DirectMessage> findTopByConversationIdAndDeletedFalseOrderByCreatedAtDesc(Long conversationId);
+    @Query("""
+            select distinct message from DirectMessage message
+            join fetch message.author
+            join fetch message.conversation
+            left join fetch message.attachments
+            where message.id = :id
+            """)
+    Optional<DirectMessage> findWithAttachmentsById(@Param("id") Long id);
+
+    @Query("""
+            select distinct message from DirectMessage message
+            join fetch message.author
+            left join fetch message.attachments
+            where message.conversation.id = :conversationId and (message.deleted is null or message.deleted = false)
+            order by message.createdAt desc
+            """)
+    List<DirectMessage> findVisibleWithAttachmentsByConversationIdOrderByCreatedAtDesc(@Param("conversationId") Long conversationId);
 }

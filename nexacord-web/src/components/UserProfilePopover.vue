@@ -30,7 +30,10 @@
         <p class="bio">{{ profileUser.bio || '这个用户还没有填写个人简介。' }}</p>
 
         <div v-if="serverName" class="mutual-server">
-          <span class="server-chip">{{ serverName.slice(0, 1).toUpperCase() }}</span>
+          <span class="server-chip">
+            <img v-if="serverIconUrl" :src="serverIconUrl" :alt="serverName" />
+            <ServerIcon v-else :size="14" aria-hidden="true" />
+          </span>
           <span>{{ serverName }}</span>
         </div>
 
@@ -79,6 +82,7 @@ import {
   Pencil,
   PhoneCall,
   Plus,
+  Server as ServerIcon,
   Smile,
   UserCheck,
 } from 'lucide-vue-next';
@@ -101,6 +105,7 @@ type OpenUserPopoverDetail = {
   user: PopoverUser;
   role?: MemberRole;
   serverName?: string | null;
+  serverIconUrl?: string | null;
   x: number;
   y: number;
 };
@@ -118,6 +123,7 @@ const isOpen = ref(false);
 const profileUser = ref<PopoverUser | null>(null);
 const role = ref<MemberRole | null>(null);
 const serverName = ref('');
+const serverIconUrl = ref<string | null>(null);
 const quickMessage = ref('');
 const position = reactive({
   left: 0,
@@ -190,6 +196,7 @@ const openPopover = (event: Event) => {
   profileUser.value = enrichedUser;
   role.value = detail.role || null;
   serverName.value = detail.serverName || currentServer.value?.name || '';
+  serverIconUrl.value = detail.serverIconUrl || currentServer.value?.iconUrl || null;
   quickMessage.value = '';
   clampPosition(detail.x, detail.y);
   isOpen.value = true;
@@ -359,9 +366,7 @@ onBeforeUnmount(() => {
 }
 
 .status-dot.offline {
-  background: transparent;
-  border-color: var(--discord-bg);
-  box-shadow: inset 0 0 0 3px var(--discord-text-faint);
+  background: #80848e;
 }
 
 .identity-block {
@@ -424,10 +429,17 @@ onBeforeUnmount(() => {
   border-radius: 6px;
   display: grid;
   place-items: center;
-  background: var(--discord-brand);
-  color: white;
+  background: #f2f3f5;
+  color: #1e1f22;
   font-size: 11px;
   flex: 0 0 auto;
+  overflow: hidden;
+}
+
+.server-chip img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .mutual-server span:last-child {

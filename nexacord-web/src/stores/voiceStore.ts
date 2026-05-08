@@ -30,6 +30,31 @@ type VoiceSignalMessage = {
   candidate?: RTCIceCandidateInit;
 };
 
+type JoinChannelOptions = {
+  channelId: number;
+  channelName: string;
+  serverId?: number | null;
+  serverName?: string | null;
+  directPeer?: VoiceUser | null;
+};
+
+type VoiceStateMessage = {
+  participantsByChannel?: Record<string, VoiceUser[]>;
+};
+
+type DirectCallSignalMessage = {
+  channelId: number;
+  type:
+    | 'DIRECT_CALL_REQUEST'
+    | 'DIRECT_CALL_ACCEPT'
+    | 'DIRECT_CALL_DECLINE'
+    | 'DIRECT_CALL_CANCEL'
+    | 'DIRECT_CALL_END';
+  caller: VoiceUser;
+  callee: VoiceUser;
+  reason?: string;
+};
+
 const displayNameOf = (user: VoiceUser | User | null | undefined) =>
   displayUserLabel(user) || '未知用户';
 
@@ -87,9 +112,15 @@ export const useVoiceStore = defineStore('voice', () => {
   const isDeafened = ref(false);
   const voiceError = ref('');
   const participants = ref<VoiceUser[]>([]);
+  const participantsByChannel = ref<Record<number, VoiceUser[]>>({});
   const remoteStreams = ref<Array<{ userId: number; stream: MediaStream }>>([]);
   const speakingUserIds = ref<Set<number>>(new Set());
   const voiceLevels = ref<Record<number, number>>({});
+  const inputVolume = ref(100);
+  const outputVolume = ref(100);
+  const userVolumes = ref<Record<number, number>>({});
+  const incomingCall = ref<DirectCallSignalMessage | null>(null);
+  const outgoingCall = ref<DirectCallSignalMessage | null>(null);
 
   const peerConnections = new Map<number, RTCPeerConnection>();
   const pendingIceCandidates = new Map<number, RTCIceCandidateInit[]>();
@@ -104,13 +135,29 @@ export const useVoiceStore = defineStore('voice', () => {
   >();
   let audioContext: AudioContext | null = null;
   let localStream: MediaStream | null = null;
+  let outboundStream: MediaStream | null = null;
+  let localAudioSource: MediaStreamAudioSourceNode | null = null;
+  let microphoneGainNode: GainNode | null = null;
+  let localAudioDestination: MediaStreamAudioDestinationNode | null = null;
   let unsubscribeVoice: (() => void) | null = null;
+  let unsubscribeVoiceState: (() => void) | null = null;
+  let unsubscribeDirectCall: (() => void) | null = null;
+  let realtimeInitialized = false;
+  let subscribedDirectCallUserId: number | null = null;
+  let lastJoinOptions: JoinChannelOptions | null = null;
+  let reconnectTimer: number | null = null;
+  let reconnectAttempts = 0;
+  let directCallPeer: VoiceUser | null = null;
 
   const currentUser = computed(() => userStore.currentUser);
 
   const visibleParticipants = computed(() => {
     const participantMap = new Map<number, VoiceUser>();
-    participants.value.forEach((participant) => {
+    const activeParticipants = activeChannelId.value
+      ? participantsByChannel.value[activeChannelId.value] || participants.value
+      : participants.value;
+
+    activeParticipants.forEach((participant) => {
       participantMap.set(participant.id, participant);
     });
 
@@ -150,6 +197,9 @@ export const useVoiceStore = defineStore('voice', () => {
   const isActiveChannel = (channelId: number) =>
     isJoined.value && activeChannelId.value === channelId;
 
+  const getParticipantsForChannel = (channelId: number) => participantsByChannel.value[channelId] || [];
+  const getParticipantCountForChannel = (channelId: number) => getParticipantsForChannel(channelId).length;
+
   const subscribeVoiceTopic = (channelId: number) => {
     unsubscribeVoice?.();
     unsubscribeVoice = websocketService.subscribe(`/topic/voice/${channelId}`, (payload) => {
@@ -159,12 +209,72 @@ export const useVoiceStore = defineStore('voice', () => {
     return Boolean(unsubscribeVoice);
   };
 
-  const joinChannel = async (options: {
-    channelId: number;
-    channelName: string;
-    serverId?: number | null;
-    serverName?: string | null;
-  }) => {
+  const subscribeVoiceState = () => {
+    if (!websocketService.isConnected() || unsubscribeVoiceState) {
+      return;
+    }
+
+    unsubscribeVoiceState = websocketService.subscribe('/topic/voice/state', (payload) => {
+      const state = (payload as VoiceStateMessage)?.participantsByChannel || {};
+      const nextState: Record<number, VoiceUser[]> = {};
+      Object.entries(state).forEach(([channelId, channelParticipants]) => {
+        nextState[Number(channelId)] = dedupeParticipants(channelParticipants || []);
+      });
+      participantsByChannel.value = nextState;
+      if (activeChannelId.value) {
+        participants.value = nextState[activeChannelId.value] || participants.value;
+      }
+    });
+
+    websocketService.emit('/voice/state', {});
+  };
+
+  const subscribeDirectCall = () => {
+    const userId = currentUser.value?.id;
+    if (!userId || !websocketService.isConnected() || subscribedDirectCallUserId === userId) {
+      return;
+    }
+
+    unsubscribeDirectCall?.();
+    unsubscribeDirectCall = websocketService.subscribe(`/topic/direct-call/user/${userId}`, (payload) => {
+      void handleDirectCallSignal(payload as DirectCallSignalMessage);
+    });
+    subscribedDirectCallUserId = unsubscribeDirectCall ? userId : null;
+  };
+
+  const handleRealtimeConnect = () => {
+    subscribeVoiceState();
+    subscribeDirectCall();
+    if (lastJoinOptions && !isJoined.value && reconnectAttempts > 0) {
+      scheduleVoiceReconnect('实时连接已恢复，正在重连语音。');
+    }
+  };
+
+  const initializeRealtime = () => {
+    if (realtimeInitialized) {
+      subscribeVoiceState();
+      subscribeDirectCall();
+      return;
+    }
+
+    websocketService.on('connect', handleRealtimeConnect);
+    websocketService.on('disconnect', () => {
+      unsubscribeVoiceState?.();
+      unsubscribeVoiceState = null;
+      unsubscribeDirectCall?.();
+      unsubscribeDirectCall = null;
+      subscribedDirectCallUserId = null;
+      if (isJoined.value && lastJoinOptions) {
+        cleanupVoice(false, true);
+        scheduleVoiceReconnect('实时连接已断开，正在等待自动重连。');
+      }
+    });
+    realtimeInitialized = true;
+    subscribeVoiceState();
+    subscribeDirectCall();
+  };
+
+  const joinChannel = async (options: JoinChannelOptions, meta: { reconnecting?: boolean } = {}) => {
     if (!currentUser.value || isConnecting.value) {
       return;
     }
@@ -174,11 +284,16 @@ export const useVoiceStore = defineStore('voice', () => {
     }
 
     if (isJoined.value) {
-      leaveChannel();
+      leaveChannel(false);
     }
 
-    voiceError.value = '';
+    clearReconnectTimer();
+    if (!meta.reconnecting) {
+      reconnectAttempts = 0;
+    }
+    voiceError.value = meta.reconnecting ? '正在自动重连语音……' : '';
     isConnecting.value = true;
+    lastJoinOptions = options;
 
     try {
       if (!websocketService.isConnected()) {
@@ -193,6 +308,7 @@ export const useVoiceStore = defineStore('voice', () => {
         },
         video: false,
       });
+      setupLocalAudioPipeline(localStream);
       if (audioContext?.state === 'suspended') {
         await audioContext.resume();
       }
@@ -205,14 +321,24 @@ export const useVoiceStore = defineStore('voice', () => {
       activeChannelName.value = options.channelName;
       activeServerId.value = options.serverId ?? null;
       activeServerName.value = options.serverName || '';
+      directCallPeer = options.directPeer || null;
       isJoined.value = true;
       participants.value = [toVoiceUser(currentUser.value)];
+      participantsByChannel.value = {
+        ...participantsByChannel.value,
+        [options.channelId]: participants.value,
+      };
       setupVoiceAnalyser(currentUser.value.id, localStream, () => !isMuted.value);
 
       websocketService.emit(`/voice/${options.channelId}/join`, {});
+      reconnectAttempts = 0;
+      voiceError.value = '';
     } catch (error: any) {
       voiceError.value = error?.message || '无法加入语音频道，请检查麦克风权限。';
-      cleanupVoice(false);
+      cleanupVoice(false, true);
+      if (meta.reconnecting) {
+        scheduleVoiceReconnect('语音重连失败，稍后继续尝试。');
+      }
     } finally {
       isConnecting.value = false;
     }
@@ -225,19 +351,41 @@ export const useVoiceStore = defineStore('voice', () => {
       return;
     }
 
-    await joinChannel({
+    if (!websocketService.isConnected()) {
+      voiceError.value = '实时连接还没有准备好，请稍后再试。';
+      return;
+    }
+
+    const callee = {
+      id: user.id,
+      username: user.username,
+      displayName: user.displayName || null,
+      avatarUrl: user.avatarUrl || null,
+      status: user.status,
+    };
+    outgoingCall.value = {
       channelId: directRoomIdFor(currentUser.value.id, user.id),
-      channelName: `与 ${displayUserLabel(user)} 的通话`,
-      serverId: null,
-      serverName: '私信',
-    });
+      type: 'DIRECT_CALL_REQUEST',
+      caller: toVoiceUser(currentUser.value),
+      callee,
+    };
+    websocketService.emit(`/direct-call/${user.id}/request`, {});
   };
 
-  const leaveChannel = () => {
+  const leaveChannel = (notifyDirectCall = true) => {
+    clearReconnectTimer();
+    const peer = directCallPeer;
     if (isJoined.value && activeChannelId.value) {
       websocketService.emit(`/voice/${activeChannelId.value}/leave`, {});
     }
 
+    if (notifyDirectCall && peer) {
+      websocketService.emit(`/direct-call/${peer.id}/end`, {});
+    }
+
+    lastJoinOptions = null;
+    reconnectAttempts = 0;
+    directCallPeer = null;
     cleanupVoice(true);
   };
 
@@ -250,6 +398,7 @@ export const useVoiceStore = defineStore('voice', () => {
     localStream?.getAudioTracks().forEach((track) => {
       track.enabled = !isMuted.value;
     });
+    updateMicrophoneGain();
   };
 
   const toggleDeafen = () => {
@@ -271,7 +420,12 @@ export const useVoiceStore = defineStore('voice', () => {
     }
 
     if (message.participants) {
-      participants.value = dedupeParticipants(message.participants);
+      const nextParticipants = dedupeParticipants(message.participants);
+      participants.value = nextParticipants;
+      participantsByChannel.value = {
+        ...participantsByChannel.value,
+        [message.channelId]: nextParticipants,
+      };
     }
 
     const senderId = message.sender?.id;
@@ -322,9 +476,10 @@ export const useVoiceStore = defineStore('voice', () => {
       iceServers: parseIceServers(),
     });
 
-    localStream?.getTracks().forEach((track) => {
-      if (localStream) {
-        peerConnection.addTrack(track, localStream);
+    const streamForPeers = outboundStream || localStream;
+    streamForPeers?.getTracks().forEach((track) => {
+      if (streamForPeers) {
+        peerConnection.addTrack(track, streamForPeers);
       }
     });
 
@@ -352,12 +507,14 @@ export const useVoiceStore = defineStore('voice', () => {
     peerConnection.onconnectionstatechange = () => {
       if (['failed', 'disconnected'].includes(peerConnection.connectionState)) {
         voiceError.value = '语音连接不稳定，可能需要配置 TURN 中继服务器。';
+        scheduleVoiceReconnect('语音连接断开，正在尝试自动重连。');
       }
     };
 
     peerConnection.oniceconnectionstatechange = () => {
       if (['failed', 'disconnected'].includes(peerConnection.iceConnectionState)) {
         voiceError.value = '无法建立稳定的语音媒体连接，请检查 TURN/UDP 网络配置。';
+        scheduleVoiceReconnect('媒体连接断开，正在尝试自动重连。');
       }
     };
 
@@ -413,6 +570,35 @@ export const useVoiceStore = defineStore('voice', () => {
     }
 
     return audioContext;
+  };
+
+  const setupLocalAudioPipeline = (stream: MediaStream) => {
+    cleanupLocalAudioPipeline();
+    const context = ensureAudioContext();
+    localAudioSource = context.createMediaStreamSource(stream);
+    microphoneGainNode = context.createGain();
+    localAudioDestination = context.createMediaStreamDestination();
+    localAudioSource.connect(microphoneGainNode);
+    microphoneGainNode.connect(localAudioDestination);
+    outboundStream = localAudioDestination.stream;
+    updateMicrophoneGain();
+  };
+
+  const updateMicrophoneGain = () => {
+    if (!microphoneGainNode) {
+      return;
+    }
+
+    microphoneGainNode.gain.value = isMuted.value ? 0 : inputVolume.value / 100;
+  };
+
+  const cleanupLocalAudioPipeline = () => {
+    localAudioSource?.disconnect();
+    microphoneGainNode?.disconnect();
+    localAudioSource = null;
+    microphoneGainNode = null;
+    localAudioDestination = null;
+    outboundStream = null;
   };
 
   const setupVoiceAnalyser = (
@@ -531,9 +717,15 @@ export const useVoiceStore = defineStore('voice', () => {
     removeVoiceAnalyser(remoteUserId);
     remoteStreams.value = remoteStreams.value.filter((remote) => remote.userId !== remoteUserId);
     participants.value = participants.value.filter((participant) => participant.id !== remoteUserId);
+    if (activeChannelId.value) {
+      participantsByChannel.value = {
+        ...participantsByChannel.value,
+        [activeChannelId.value]: participants.value,
+      };
+    }
   };
 
-  const cleanupVoice = (resetError: boolean) => {
+  const cleanupVoice = (resetError: boolean, preserveReconnect = false) => {
     unsubscribeVoice?.();
     unsubscribeVoice = null;
 
@@ -541,6 +733,7 @@ export const useVoiceStore = defineStore('voice', () => {
     peerConnections.clear();
     pendingIceCandidates.clear();
     cleanupVoiceAnalysers();
+    cleanupLocalAudioPipeline();
 
     localStream?.getTracks().forEach((track) => track.stop());
     localStream = null;
@@ -550,6 +743,7 @@ export const useVoiceStore = defineStore('voice', () => {
     activeChannelName.value = '';
     activeServerId.value = null;
     activeServerName.value = '';
+    directCallPeer = preserveReconnect ? directCallPeer : null;
     isJoined.value = false;
     isConnecting.value = false;
     isMuted.value = false;
@@ -570,6 +764,135 @@ export const useVoiceStore = defineStore('voice', () => {
     return [...participantMap.values()];
   };
 
+  const handleDirectCallSignal = async (message: DirectCallSignalMessage) => {
+    const user = currentUser.value;
+    if (!user || !message?.type) {
+      return;
+    }
+
+    const isCaller = message.caller?.id === user.id;
+    const isCallee = message.callee?.id === user.id;
+    if (!isCaller && !isCallee) {
+      return;
+    }
+
+    if (message.type === 'DIRECT_CALL_REQUEST' && isCallee) {
+      incomingCall.value = message;
+      return;
+    }
+
+    if (message.type === 'DIRECT_CALL_ACCEPT') {
+      incomingCall.value = null;
+      outgoingCall.value = null;
+      const peer = isCaller ? message.callee : message.caller;
+      await joinChannel({
+        channelId: message.channelId,
+        channelName: `与 ${displayNameOf(peer)} 的通话`,
+        serverId: null,
+        serverName: '私信',
+        directPeer: peer,
+      });
+      return;
+    }
+
+    if (['DIRECT_CALL_DECLINE', 'DIRECT_CALL_CANCEL', 'DIRECT_CALL_END'].includes(message.type)) {
+      incomingCall.value = null;
+      outgoingCall.value = null;
+      if (message.type === 'DIRECT_CALL_END' && activeChannelId.value === message.channelId) {
+        leaveChannel(false);
+      }
+    }
+  };
+
+  const acceptIncomingCall = () => {
+    const call = incomingCall.value;
+    if (!call) {
+      return;
+    }
+
+    websocketService.emit(`/direct-call/${call.caller.id}/accept`, {});
+  };
+
+  const declineIncomingCall = () => {
+    const call = incomingCall.value;
+    if (!call) {
+      return;
+    }
+
+    websocketService.emit(`/direct-call/${call.caller.id}/decline`, {});
+    incomingCall.value = null;
+  };
+
+  const cancelOutgoingCall = () => {
+    const call = outgoingCall.value;
+    if (!call) {
+      return;
+    }
+
+    websocketService.emit(`/direct-call/${call.callee.id}/cancel`, {});
+    outgoingCall.value = null;
+  };
+
+  const clearReconnectTimer = () => {
+    if (reconnectTimer != null) {
+      window.clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+  };
+
+  const scheduleVoiceReconnect = (message: string) => {
+    if (!lastJoinOptions || reconnectTimer != null) {
+      return;
+    }
+
+    if (reconnectAttempts >= 5) {
+      voiceError.value = '语音自动重连失败，请手动重新加入。';
+      lastJoinOptions = null;
+      return;
+    }
+
+    reconnectAttempts += 1;
+    voiceError.value = message;
+    reconnectTimer = window.setTimeout(() => {
+      const options = lastJoinOptions;
+      reconnectTimer = null;
+      if (!options || !websocketService.isConnected()) {
+        scheduleVoiceReconnect('实时连接尚未恢复，继续等待自动重连。');
+        return;
+      }
+
+      cleanupVoice(false, true);
+      void joinChannel(options, { reconnecting: true });
+    }, Math.min(8000, 900 * reconnectAttempts));
+  };
+
+  const clampVolume = (value: number) => Math.min(200, Math.max(0, Math.round(value)));
+
+  const setInputVolume = (value: number) => {
+    inputVolume.value = clampVolume(value);
+    updateMicrophoneGain();
+  };
+
+  const setOutputVolume = (value: number) => {
+    outputVolume.value = clampVolume(value);
+  };
+
+  const setUserVolume = (userId: number, value: number) => {
+    userVolumes.value = {
+      ...userVolumes.value,
+      [userId]: clampVolume(value),
+    };
+  };
+
+  const getUserVolume = (userId: number) => userVolumes.value[userId] ?? 100;
+  const getPlaybackGain = (userId: number) => {
+    if (isDeafened.value) {
+      return 0;
+    }
+
+    return (outputVolume.value / 100) * (getUserVolume(userId) / 100);
+  };
+
   const isUserSpeaking = (userId: number) => speakingUserIds.value.has(userId);
   const getVoiceLevel = (userId: number) => voiceLevels.value[userId] || 0;
 
@@ -584,21 +907,38 @@ export const useVoiceStore = defineStore('voice', () => {
     isDeafened,
     voiceError,
     participants,
+    participantsByChannel,
     speakingUserIds,
     voiceLevels,
+    inputVolume,
+    outputVolume,
+    userVolumes,
+    incomingCall,
+    outgoingCall,
     visibleParticipants,
     participantCount,
     remoteStreams,
     statusText,
     selfVoiceStatus,
     displayNameOf,
+    getParticipantsForChannel,
+    getParticipantCountForChannel,
     isUserSpeaking,
     getVoiceLevel,
+    getUserVolume,
+    getPlaybackGain,
     isActiveChannel,
+    initializeRealtime,
     joinChannel,
     startDirectCall,
+    acceptIncomingCall,
+    declineIncomingCall,
+    cancelOutgoingCall,
     leaveChannel,
     toggleMute,
     toggleDeafen,
+    setInputVolume,
+    setOutputVolume,
+    setUserVolume,
   };
 });

@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
-import directMessageService from '../services/directMessageService';
+import directMessageService, { type DirectMessageCreateAttachment } from '../services/directMessageService';
 import websocketService from '../services/websocketService';
 import { useUserStore } from './userStore';
 import type { DirectConversation, DirectMessage, DirectRealtimeEvent, User } from '../types';
@@ -16,6 +16,13 @@ const sortMessages = (items: DirectMessage[]) =>
   [...items].sort(
     (left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
   );
+
+const normalizeMessage = (message: DirectMessage): DirectMessage => ({
+  ...message,
+  edited: message.edited ?? false,
+  deleted: message.deleted ?? false,
+  attachments: Array.isArray(message.attachments) ? message.attachments : [],
+});
 
 export const useDirectMessageStore = defineStore('directMessage', () => {
   const conversations = ref<DirectConversation[]>([]);
@@ -61,16 +68,22 @@ export const useDirectMessageStore = defineStore('directMessage', () => {
   };
 
   const upsertMessage = (message: DirectMessage) => {
-    const conversationMessages = [...(messages.value[message.conversationId] || [])];
-    const index = conversationMessages.findIndex((item) => item.id === message.id);
+    const normalizedMessage = normalizeMessage(message);
+    const conversationMessages = [...(messages.value[normalizedMessage.conversationId] || [])];
+    const index = conversationMessages.findIndex((item) => item.id === normalizedMessage.id);
 
     if (index >= 0) {
-      conversationMessages[index] = message;
+      conversationMessages[index] = normalizedMessage;
     } else {
-      conversationMessages.push(message);
+      conversationMessages.push(normalizedMessage);
     }
 
-    messages.value[message.conversationId] = sortMessages(conversationMessages);
+    messages.value[normalizedMessage.conversationId] = sortMessages(conversationMessages);
+  };
+
+  const removeMessage = (message: DirectMessage) => {
+    const conversationMessages = messages.value[message.conversationId] || [];
+    messages.value[message.conversationId] = conversationMessages.filter((item) => item.id !== message.id);
   };
 
   const handleRealtimeEvent = (payload: unknown) => {
@@ -81,6 +94,11 @@ export const useDirectMessageStore = defineStore('directMessage', () => {
 
     upsertConversation(event.conversation);
     if (event.message) {
+      if (event.type === 'MESSAGE_DELETED' || event.message.deleted) {
+        removeMessage(event.message);
+        return;
+      }
+
       upsertMessage(event.message);
     }
   };
@@ -194,7 +212,7 @@ export const useDirectMessageStore = defineStore('directMessage', () => {
 
     try {
       const fetchedMessages = await directMessageService.getMessages(conversationId, 'asc');
-      messages.value[conversationId] = sortMessages(fetchedMessages);
+      messages.value[conversationId] = sortMessages(fetchedMessages.map(normalizeMessage));
       return messages.value[conversationId];
     } catch (err: any) {
       error.value =
@@ -208,8 +226,12 @@ export const useDirectMessageStore = defineStore('directMessage', () => {
     }
   };
 
-  const sendMessage = async (conversationId: number, content: string) => {
-    if (!content.trim()) {
+  const sendMessage = async (
+    conversationId: number,
+    content: string,
+    attachments: DirectMessageCreateAttachment[] = []
+  ) => {
+    if (!content.trim() && attachments.length === 0) {
       return false;
     }
 
@@ -217,7 +239,7 @@ export const useDirectMessageStore = defineStore('directMessage', () => {
     error.value = null;
 
     try {
-      const message = await directMessageService.sendMessage(conversationId, content.trim());
+      const message = await directMessageService.sendMessage(conversationId, content.trim(), attachments);
       upsertMessage(message);
       return true;
     } catch (err: any) {
@@ -235,6 +257,37 @@ export const useDirectMessageStore = defineStore('directMessage', () => {
     currentConversationId.value = null;
   };
 
+  const updateMessage = async (conversationId: number, messageId: number, content: string) => {
+    try {
+      const message = await directMessageService.updateMessage(conversationId, messageId, content);
+      upsertMessage(message);
+      return true;
+    } catch (err: any) {
+      error.value =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        '更新私信失败。';
+      return false;
+    }
+  };
+
+  const deleteMessage = async (conversationId: number, messageId: number) => {
+    try {
+      await directMessageService.deleteMessage(conversationId, messageId);
+      const existingMessage = messages.value[conversationId]?.find((message) => message.id === messageId);
+      if (existingMessage) {
+        removeMessage(existingMessage);
+      }
+      return true;
+    } catch (err: any) {
+      error.value =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        '删除私信失败。';
+      return false;
+    }
+  };
+
   return {
     conversations,
     currentConversationId,
@@ -249,6 +302,8 @@ export const useDirectMessageStore = defineStore('directMessage', () => {
     openConversationWithUser,
     fetchMessages,
     sendMessage,
+    updateMessage,
+    deleteMessage,
     clearCurrentConversation,
   };
 });

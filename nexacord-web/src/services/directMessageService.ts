@@ -1,5 +1,10 @@
 import api from './api';
-import type { DirectConversation, DirectMessage } from '../types';
+import type { Attachment, DirectConversation, DirectMessage } from '../types';
+
+export type DirectMessageCreateAttachment = Pick<
+  Attachment,
+  'fileName' | 'fileType' | 'fileSize' | 'url'
+>;
 
 class DirectMessageService {
   async getConversations(): Promise<DirectConversation[]> {
@@ -20,10 +25,29 @@ class DirectMessageService {
     });
   }
 
-  async sendMessage(conversationId: number, content: string): Promise<DirectMessage> {
+  async sendMessage(
+    conversationId: number,
+    content: string,
+    attachments: DirectMessageCreateAttachment[] = []
+  ): Promise<DirectMessage> {
     return api.post<DirectMessage>(`/direct-conversations/${conversationId}/messages`, {
       content,
+      attachments,
     });
+  }
+
+  async updateMessage(
+    conversationId: number,
+    messageId: number,
+    content: string
+  ): Promise<DirectMessage> {
+    return api.put<DirectMessage>(`/direct-conversations/${conversationId}/messages/${messageId}`, {
+      content,
+    });
+  }
+
+  async deleteMessage(conversationId: number, messageId: number): Promise<void> {
+    return api.delete(`/direct-conversations/${conversationId}/messages/${messageId}`);
   }
 }
 

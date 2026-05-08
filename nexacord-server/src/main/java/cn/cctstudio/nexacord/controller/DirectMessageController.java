@@ -1,16 +1,10 @@
 package cn.cctstudio.nexacord.controller;
 
-import cn.cctstudio.nexacord.dto.DirectConversationResponse;
-import cn.cctstudio.nexacord.dto.DirectMessageCreateRequest;
-import cn.cctstudio.nexacord.dto.DirectMessageResponse;
-import cn.cctstudio.nexacord.dto.DirectRealtimeEvent;
+import cn.cctstudio.nexacord.dto.*;
 import cn.cctstudio.nexacord.exception.AccessDeniedException;
 import cn.cctstudio.nexacord.exception.BadRequestException;
 import cn.cctstudio.nexacord.exception.ResourceNotFoundException;
-import cn.cctstudio.nexacord.model.DirectConversation;
-import cn.cctstudio.nexacord.model.DirectMessage;
-import cn.cctstudio.nexacord.model.Friendship;
-import cn.cctstudio.nexacord.model.User;
+import cn.cctstudio.nexacord.model.*;
 import cn.cctstudio.nexacord.repository.DirectConversationRepository;
 import cn.cctstudio.nexacord.repository.DirectMessageRepository;
 import cn.cctstudio.nexacord.repository.FriendshipRepository;
@@ -25,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 @RestController
@@ -122,13 +117,29 @@ public class DirectMessageController {
             @AuthenticationPrincipal User currentUser
     ) {
         DirectConversation conversation = requireParticipant(conversationId, currentUser);
+        String content = normalizeContent(request.getContent());
+        List<DirectAttachmentRequest> attachmentRequests = request.getAttachments() == null
+                ? List.of()
+                : request.getAttachments();
+
+        if (content.isBlank() && attachmentRequests.isEmpty()) {
+            throw new BadRequestException("消息内容或图片不能为空。");
+        }
+
         DirectMessage message = DirectMessage.builder()
                 .conversation(conversation)
                 .author(currentUser)
-                .content(request.getContent().trim())
+                .content(content)
                 .edited(Boolean.FALSE)
                 .deleted(Boolean.FALSE)
+                .attachments(new LinkedHashSet<>())
                 .build();
+        attachmentRequests.stream()
+                .map(DirectMessageController::toDirectAttachment)
+                .forEach(attachment -> {
+                    attachment.setMessage(message);
+                    message.getAttachments().add(attachment);
+                });
 
         DirectMessage savedMessage = directMessageRepository.save(message);
         conversation.setUpdatedAt(Instant.now());
@@ -136,6 +147,46 @@ public class DirectMessageController {
         publishConversationEvent(conversation, savedMessage);
 
         return new ResponseEntity<>(DirectMessageResponse.from(savedMessage), HttpStatus.CREATED);
+    }
+
+    @PutMapping("/{conversationId}/messages/{messageId}")
+    public ResponseEntity<DirectMessageResponse> updateMessage(
+            @PathVariable Long conversationId,
+            @PathVariable Long messageId,
+            @Valid @RequestBody DirectMessageUpdateRequest request,
+            @AuthenticationPrincipal User currentUser
+    ) {
+        DirectConversation conversation = requireParticipant(conversationId, currentUser);
+        DirectMessage message = requireMessage(conversation, messageId);
+        requireAuthor(message, currentUser);
+
+        message.setContent(request.getContent().trim());
+        message.setEdited(Boolean.TRUE);
+        DirectMessage savedMessage = directMessageRepository.save(message);
+        conversation.setUpdatedAt(Instant.now());
+        conversationRepository.save(conversation);
+        publishConversationEvent(conversation, savedMessage, "MESSAGE_UPDATED");
+
+        return new ResponseEntity<>(DirectMessageResponse.from(savedMessage), HttpStatus.OK);
+    }
+
+    @DeleteMapping("/{conversationId}/messages/{messageId}")
+    public ResponseEntity<Void> deleteMessage(
+            @PathVariable Long conversationId,
+            @PathVariable Long messageId,
+            @AuthenticationPrincipal User currentUser
+    ) {
+        DirectConversation conversation = requireParticipant(conversationId, currentUser);
+        DirectMessage message = requireMessage(conversation, messageId);
+        requireAuthor(message, currentUser);
+
+        message.setDeleted(Boolean.TRUE);
+        directMessageRepository.save(message);
+        conversation.setUpdatedAt(Instant.now());
+        conversationRepository.save(conversation);
+        publishConversationEvent(conversation, message, "MESSAGE_DELETED");
+
+        return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
     private DirectConversation requireParticipant(Long conversationId, User currentUser) {
@@ -162,28 +213,78 @@ public class DirectMessageController {
 
     private DirectMessage findLastMessage(DirectConversation conversation) {
         return directMessageRepository
-                .findTopByConversationIdAndDeletedFalseOrderByCreatedAtDesc(conversation.getId())
+                .findVisibleWithAttachmentsByConversationIdOrderByCreatedAtDesc(conversation.getId())
+                .stream()
+                .findFirst()
                 .orElse(null);
     }
 
     private void publishConversationEvent(DirectConversation conversation, DirectMessage message) {
-        publishConversationEventForUser(conversation, conversation.getUserOne(), message);
-        publishConversationEventForUser(conversation, conversation.getUserTwo(), message);
+        publishConversationEvent(
+                conversation,
+                message,
+                message == null ? "CONVERSATION_UPDATED" : "MESSAGE_CREATED"
+        );
+    }
+
+    private void publishConversationEvent(DirectConversation conversation, DirectMessage message, String type) {
+        publishConversationEventForUser(conversation, conversation.getUserOne(), message, type);
+        publishConversationEventForUser(conversation, conversation.getUserTwo(), message, type);
     }
 
     private void publishConversationEventForUser(
             DirectConversation conversation,
             User user,
-            DirectMessage message
+            DirectMessage message,
+            String type
     ) {
-        DirectMessage lastMessage = message == null ? findLastMessage(conversation) : message;
+        DirectMessage lastMessage = message == null || "MESSAGE_DELETED".equals(type)
+                ? findLastMessage(conversation)
+                : message;
         messagingTemplate.convertAndSend(
                 "/topic/direct/user/" + user.getId(),
                 DirectRealtimeEvent.builder()
-                        .type(message == null ? "CONVERSATION_UPDATED" : "MESSAGE_CREATED")
+                        .type(type)
                         .conversation(DirectConversationResponse.from(conversation, user, lastMessage))
                         .message(message == null ? null : DirectMessageResponse.from(message))
                         .build()
         );
+    }
+
+    private DirectMessage requireMessage(DirectConversation conversation, Long messageId) {
+        DirectMessage message = directMessageRepository.findWithAttachmentsById(messageId)
+                .orElseThrow(() -> new ResourceNotFoundException("没有找到这条私信消息。"));
+        if (!message.getConversation().getId().equals(conversation.getId())) {
+            throw new AccessDeniedException("你不能访问这条私信消息。");
+        }
+        return message;
+    }
+
+    private void requireAuthor(DirectMessage message, User currentUser) {
+        if (!message.getAuthor().getId().equals(currentUser.getId())) {
+            throw new AccessDeniedException("只能修改或删除自己发送的消息。");
+        }
+    }
+
+    private String normalizeContent(String content) {
+        return content == null ? "" : content.trim();
+    }
+
+    private static DirectAttachment toDirectAttachment(DirectAttachmentRequest request) {
+        validateImageAttachment(request.getFileType(), request.getUrl());
+        return DirectAttachment.builder()
+                .fileName(request.getFileName().trim())
+                .fileType(request.getFileType())
+                .fileSize(request.getFileSize())
+                .url(request.getUrl().trim())
+                .build();
+    }
+
+    private static void validateImageAttachment(String fileType, String url) {
+        boolean imageContentType = fileType != null && fileType.toLowerCase().startsWith("image/");
+        boolean imageUrl = url != null && url.toLowerCase().matches(".*\\.(png|jpe?g|gif|webp|avif|svg)(\\?.*)?$");
+        if (!imageContentType && !imageUrl) {
+            throw new BadRequestException("当前只支持发送图片。");
+        }
     }
 }

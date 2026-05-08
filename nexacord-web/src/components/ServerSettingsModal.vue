@@ -371,8 +371,8 @@ onBeforeUnmount(() => {
   border-radius: 18px;
   display: grid;
   place-items: center;
-  background: var(--discord-brand);
-  color: white;
+  background: #f2f3f5;
+  color: #1e1f22;
   font-weight: 900;
   overflow: hidden;
 }
@@ -625,8 +625,8 @@ onBeforeUnmount(() => {
   border-radius: 26px;
   display: grid;
   place-items: center;
-  background: var(--discord-brand);
-  color: white;
+  background: #f2f3f5;
+  color: #1e1f22;
   font-size: 30px;
   font-weight: 900;
   overflow: hidden;

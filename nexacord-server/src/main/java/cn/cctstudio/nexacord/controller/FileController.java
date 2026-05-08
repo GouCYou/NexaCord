@@ -1,5 +1,6 @@
 package cn.cctstudio.nexacord.controller;
 
+import cn.cctstudio.nexacord.exception.BadRequestException;
 import cn.cctstudio.nexacord.service.FileStorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -20,6 +21,7 @@ public class FileController {
     @PostMapping("/upload")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<String> uploadFile(@RequestParam("file") MultipartFile file) throws IOException {
+        requireImage(file);
         String fileUrl = fileStorageService.uploadFile(file);
         return new ResponseEntity<>(fileUrl, HttpStatus.CREATED);
     }
@@ -27,6 +29,7 @@ public class FileController {
     @PostMapping("/upload-multiple")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<String>> uploadMultipleFiles(@RequestParam("files") List<MultipartFile> files) throws IOException {
+        files.forEach(this::requireImage);
         List<String> fileUrls = fileStorageService.uploadMultipleFiles(files);
         return new ResponseEntity<>(fileUrls, HttpStatus.CREATED);
     }
@@ -45,5 +48,16 @@ public class FileController {
             @RequestParam(required = false, defaultValue = "15") long expirationMinutes) {
         String presignedUrl = fileStorageService.generatePresignedUrl(fileUrl, expirationMinutes);
         return new ResponseEntity<>(presignedUrl, HttpStatus.OK);
+    }
+
+    private void requireImage(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new BadRequestException("不能上传空文件。");
+        }
+
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.toLowerCase().startsWith("image/")) {
+            throw new BadRequestException("当前只能上传图片文件。");
+        }
     }
 }

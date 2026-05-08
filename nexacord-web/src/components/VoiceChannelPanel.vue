@@ -21,7 +21,7 @@
           <PhoneCall :size="18" aria-hidden="true" />
           <span>{{ isConnecting ? '连接中……' : '加入语音' }}</span>
         </button>
-        <button v-else class="call-button leave" type="button" @click="leaveChannel">
+        <button v-else class="call-button leave" type="button" @click="disconnectVoice">
           <PhoneOff :size="18" aria-hidden="true" />
           <span>断开连接</span>
         </button>
@@ -46,6 +46,17 @@
       <span>{{ isCurrentVoiceChannel ? selfVoiceStatus : '你可以先加入这个语音频道' }}</span>
     </div>
 
+    <div v-if="isCurrentVoiceChannel" class="voice-mixer">
+      <label>
+        <span>麦克风 {{ inputVolume }}%</span>
+        <input type="range" min="0" max="200" :value="inputVolume" @input="setInputVolumeFromEvent" />
+      </label>
+      <label>
+        <span>扬声器 {{ outputVolume }}%</span>
+        <input type="range" min="0" max="200" :value="outputVolume" @input="setOutputVolumeFromEvent" />
+      </label>
+    </div>
+
     <div class="voice-grid">
       <article
         v-for="participant in displayedParticipants"
@@ -60,6 +71,16 @@
         </div>
         <strong>{{ displayNameOf(participant) }}</strong>
         <span>{{ participantVoiceStatus(participant) }}</span>
+        <label v-if="isCurrentVoiceChannel && participant.id !== currentUser?.id" class="user-volume" @click.stop>
+          <span>{{ getUserVolume(participant.id) }}%</span>
+          <input
+            type="range"
+            min="0"
+            max="200"
+            :value="getUserVolume(participant.id)"
+            @input="setUserVolumeFromEvent(participant.id, $event)"
+          />
+        </label>
       </article>
 
       <div v-if="displayedParticipants.length === 0" class="voice-empty">
@@ -95,6 +116,8 @@ const {
   isConnecting,
   isMuted,
   isDeafened,
+  inputVolume,
+  outputVolume,
   voiceError,
   visibleParticipants,
   selfVoiceStatus,
@@ -104,17 +127,22 @@ const {
   displayNameOf,
   getVoiceLevel,
   isUserSpeaking,
+  getParticipantsForChannel,
+  getUserVolume,
   joinChannel,
   leaveChannel,
   toggleMute,
   toggleDeafen,
+  setInputVolume,
+  setOutputVolume,
+  setUserVolume,
 } = voiceStore;
 const defaultAvatarUrl = '/logo.png';
 
 const isCurrentVoiceChannel = computed(() => activeChannelId.value === props.channelId);
 
 const displayedParticipants = computed(() =>
-  isCurrentVoiceChannel.value ? visibleParticipants.value : []
+  isCurrentVoiceChannel.value ? visibleParticipants.value : getParticipantsForChannel(props.channelId)
 );
 
 const localStatusText = computed(() => {
@@ -154,10 +182,27 @@ const openUserPopover = (user: VoiceUser, event: MouseEvent) => {
     detail: {
       user,
       serverName: currentServer.value?.name,
+      serverIconUrl: currentServer.value?.iconUrl,
       x: event.clientX,
       y: event.clientY,
     },
   }));
+};
+
+const setInputVolumeFromEvent = (event: Event) => {
+  setInputVolume(Number((event.target as HTMLInputElement).value));
+};
+
+const setOutputVolumeFromEvent = (event: Event) => {
+  setOutputVolume(Number((event.target as HTMLInputElement).value));
+};
+
+const setUserVolumeFromEvent = (userId: number, event: Event) => {
+  setUserVolume(userId, Number((event.target as HTMLInputElement).value));
+};
+
+const disconnectVoice = () => {
+  leaveChannel();
 };
 </script>
 
@@ -167,7 +212,7 @@ const openUserPopover = (user: VoiceUser, event: MouseEvent) => {
   height: 100%;
   overflow-y: auto;
   display: grid;
-  grid-template-rows: auto auto 1fr;
+  grid-template-rows: auto auto auto 1fr;
   gap: 16px;
   padding: 22px;
   background: var(--discord-elevated);
@@ -285,6 +330,30 @@ button:disabled {
   gap: 7px;
 }
 
+.voice-mixer {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--discord-surface);
+}
+
+.voice-mixer label,
+.user-volume {
+  display: grid;
+  gap: 6px;
+  color: var(--discord-text-faint);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.voice-mixer input,
+.user-volume input {
+  width: 100%;
+  accent-color: var(--discord-brand);
+}
+
 .voice-grid {
   min-height: 0;
   display: grid;
@@ -376,6 +445,11 @@ button:disabled {
 
 .voice-tile strong {
   font-size: 17px;
+}
+
+.user-volume {
+  width: min(180px, 80%);
+  margin-top: 4px;
 }
 
 .voice-tile span {

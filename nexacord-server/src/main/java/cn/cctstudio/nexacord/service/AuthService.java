@@ -28,6 +28,7 @@ public class AuthService {
 
     public AuthResponse register(RegisterRequest registerRequest) {
         String username = registerRequest.getUsername().trim();
+        String displayName = normalizeDisplayName(registerRequest.getDisplayName(), username);
         String email = normalizeEmail(registerRequest.getEmail());
 
         if (userRepository.existsByUsername(username)) {
@@ -46,7 +47,7 @@ public class AuthService {
 
         User user = User.builder()
                 .username(username)
-                .displayName(username)
+                .displayName(displayName)
                 .email(email)
                 .password(passwordEncoder.encode(registerRequest.getPassword()))
                 .status("online")
@@ -144,5 +145,13 @@ public class AuthService {
 
     private String normalizeEmail(String email) {
         return email == null ? "" : email.trim().toLowerCase();
+    }
+
+    private String normalizeDisplayName(String displayName, String fallbackUsername) {
+        if (displayName == null || displayName.trim().isEmpty()) {
+            return fallbackUsername;
+        }
+
+        return displayName.trim();
     }
 }

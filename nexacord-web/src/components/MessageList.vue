@@ -32,7 +32,7 @@
       class="messages-scroll"
       :class="{ 'is-empty-channel': currentChannel && currentChannelMessages.length === 0 && !isLoading }"
     >
-      <div v-if="isLoading" class="status-block">
+      <div v-if="isLoading && currentChannelMessages.length === 0" class="status-block">
         <div class="spinner"></div>
         <p>正在加载消息……</p>
       </div>
@@ -69,28 +69,42 @@
                 {{ displayUserName(message.author) }}
               </button>
               <span>{{ formatTime(message.createdAt) }}</span>
-              <em v-if="message.edited">已编辑</em>
+              <em v-if="message.edited">(已编辑)</em>
             </header>
 
-            <div v-if="message.content" class="message-content">{{ message.content }}</div>
+            <form v-if="editingMessageId === message.id" class="message-edit" @submit.prevent="saveMessageEdit(message.id)">
+              <textarea
+                ref="editTextarea"
+                v-model="editingContent"
+                rows="1"
+                @keydown.enter.exact.prevent="saveMessageEdit(message.id)"
+                @keydown.esc.prevent="cancelMessageEdit"
+              ></textarea>
+              <div class="message-edit-actions">
+                <button type="button" @click="cancelMessageEdit">取消</button>
+                <button type="submit" :disabled="!editingContent.trim()">保存</button>
+              </div>
+            </form>
+
+            <div v-else-if="message.content" class="message-content">{{ message.content }}</div>
 
             <div v-if="(message.attachments?.length ?? 0) > 0" class="attachments">
-              <a
-                v-for="attachment in message.attachments || []"
+              <ImageAttachment
+                v-for="attachment in imageAttachments(message.attachments || [])"
                 :key="attachment.id"
+                :source-url="attachment.url"
+                :alt="attachment.fileName"
+                @preview="openImagePreview"
+              />
+              <a
+                v-for="attachment in legacyFileAttachments(message.attachments || [])"
+                :key="`file-${attachment.id}`"
                 class="attachment"
-                :class="{ image: isImageAttachment(attachment) }"
                 :href="attachment.url"
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <img
-                  v-if="isImageAttachment(attachment)"
-                  class="attachment-image"
-                  :src="attachment.url"
-                  :alt="attachment.fileName"
-                />
-                <span v-else class="attachment-icon">
+                <span class="attachment-icon">
                   <FileIcon :size="18" aria-hidden="true" />
                 </span>
                 <span class="attachment-copy">
@@ -99,6 +113,15 @@
                 </span>
               </a>
             </div>
+          </div>
+
+          <div v-if="message.author.id === currentUser?.id" class="message-actions">
+            <button type="button" title="编辑消息" @click="startMessageEdit(message)">
+              <Pencil :size="15" aria-hidden="true" />
+            </button>
+            <button type="button" title="删除消息" @click="deleteMessage(message.id)">
+              <Trash2 :size="15" aria-hidden="true" />
+            </button>
           </div>
         </article>
       </div>
@@ -150,7 +173,7 @@
       </div>
 
       <div class="composer-input" @click.stop>
-        <input ref="fileInput" class="visually-hidden" type="file" multiple @change="handleFileSelection" />
+        <input ref="fileInput" class="visually-hidden" type="file" accept="image/*" multiple @change="handleFileSelection" />
 
         <button
           class="attach-button"
@@ -196,6 +219,8 @@
 
       <p v-if="composerError" class="composer-error">{{ composerError }}</p>
     </footer>
+
+    <ImagePreviewModal :image-url="previewImageUrl" @close="closeImagePreview" />
   </section>
 </template>
 
@@ -205,14 +230,16 @@ import { useRoute } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import dayjs from 'dayjs';
 import 'dayjs/locale/zh-cn';
-import { FileIcon, Hash, Paperclip, Send, Smile, Users, Volume2, X } from 'lucide-vue-next';
+import { FileIcon, Hash, Paperclip, Pencil, Send, Smile, Trash2, Users, Volume2, X } from 'lucide-vue-next';
+import ImageAttachment from './ImageAttachment.vue';
+import ImagePreviewModal from './ImagePreviewModal.vue';
 import VoiceChannelPanel from './VoiceChannelPanel.vue';
 import fileService from '../services/fileService';
 import { useChannelStore } from '../stores/channelStore';
 import { useMessageStore, type MessageAttachmentInput } from '../stores/messageStore';
 import { useUserStore } from '../stores/userStore';
 import { useServerStore } from '../stores/serverStore';
-import type { Attachment, User } from '../types';
+import type { Attachment, Message, User } from '../types';
 import { displayUserLabel } from '../utils/userDisplay';
 
 dayjs.locale('zh-cn');
@@ -226,8 +253,12 @@ const defaultAvatarUrl = '/logo.png';
 
 const messagesContainer = ref<HTMLElement | null>(null);
 const composerTextarea = ref<HTMLTextAreaElement | null>(null);
+const editTextarea = ref<HTMLTextAreaElement | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
 const newMessageContent = ref('');
+const editingMessageId = ref<number | null>(null);
+const editingContent = ref('');
+const previewImageUrl = ref<string | null>(null);
 const pendingFiles = ref<File[]>([]);
 const isUploading = ref(false);
 const localError = ref<string | null>(null);
@@ -302,6 +333,7 @@ const openUserPopover = (user: User, event: MouseEvent) => {
     detail: {
       user,
       serverName: currentServer.value?.name,
+      serverIconUrl: currentServer.value?.iconUrl,
       x: event.clientX,
       y: event.clientY,
     },
@@ -349,7 +381,19 @@ const formatFileSize = (bytes: number): string => {
 const isImageAttachment = (attachment: Attachment) =>
   attachment.fileType?.startsWith('image/') || /\.(png|jpe?g|gif|webp|avif|svg)$/i.test(attachment.url);
 
+const imageAttachments = (attachments: Attachment[]) => attachments.filter(isImageAttachment);
+
+const legacyFileAttachments = (attachments: Attachment[]) => attachments.filter((attachment) => !isImageAttachment(attachment));
+
 const isImageFile = (file: File) => file.type.startsWith('image/');
+
+const openImagePreview = (url: string) => {
+  previewImageUrl.value = url;
+};
+
+const closeImagePreview = () => {
+  previewImageUrl.value = null;
+};
 
 const filePreviewUrl = (file: File) => {
   const existingUrl = previewUrls.get(file);
@@ -440,6 +484,13 @@ const handleFileSelection = (event: Event) => {
     return;
   }
 
+  const nonImageFile = selectedFiles.find((file) => !isImageFile(file));
+  if (nonImageFile) {
+    localError.value = '当前只能发送图片。';
+    resetFileInput();
+    return;
+  }
+
   const existingKeys = new Set(
     pendingFiles.value.map((file) => `${file.name}-${file.size}-${file.lastModified}`)
   );
@@ -450,6 +501,7 @@ const handleFileSelection = (event: Event) => {
   });
 
   pendingFiles.value = [...pendingFiles.value, ...nextFiles];
+  localError.value = null;
   resetFileInput();
 };
 
@@ -491,11 +543,12 @@ const uploadPendingFiles = async (): Promise<MessageAttachmentInput[]> => {
 
   try {
     for (const file of pendingFiles.value) {
+      const uploadableFile = await fileService.uploadFile(file);
       uploadedAttachments.push({
         fileName: file.name,
-        fileType: file.type || 'application/octet-stream',
+        fileType: file.type || 'image/*',
         fileSize: file.size,
-        url: await fileService.uploadFile(file),
+        url: uploadableFile,
       });
     }
 
@@ -506,6 +559,35 @@ const uploadPendingFiles = async (): Promise<MessageAttachmentInput[]> => {
   } finally {
     isUploading.value = false;
   }
+};
+
+const startMessageEdit = (message: Message) => {
+  editingMessageId.value = message.id;
+  editingContent.value = message.content;
+  nextTick(() => {
+    editTextarea.value?.focus();
+  });
+};
+
+const cancelMessageEdit = () => {
+  editingMessageId.value = null;
+  editingContent.value = '';
+};
+
+const saveMessageEdit = async (messageId: number) => {
+  const content = editingContent.value.trim();
+  if (!content) {
+    return;
+  }
+
+  const success = await messageStore.updateMessage(messageId, content);
+  if (success) {
+    cancelMessageEdit();
+  }
+};
+
+const deleteMessage = async (messageId: number) => {
+  await messageStore.deleteMessage(messageId);
 };
 
 const resetComposer = () => {
@@ -702,6 +784,7 @@ onBeforeUnmount(() => {
 }
 
 .message-row {
+  position: relative;
   display: grid;
   grid-template-columns: 48px minmax(0, 1fr);
   gap: 14px;
@@ -768,7 +851,7 @@ onBeforeUnmount(() => {
 .message-meta em {
   color: var(--discord-text-faint);
   font-size: 12px;
-  font-style: normal;
+  font-style: italic;
 }
 
 .message-content {
@@ -777,6 +860,81 @@ onBeforeUnmount(() => {
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.message-actions {
+  position: absolute;
+  top: -8px;
+  right: 18px;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--discord-border);
+  border-radius: 8px;
+  background: var(--discord-elevated);
+  box-shadow: var(--discord-shadow);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.message-row:hover .message-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.message-actions button {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: var(--discord-text-muted);
+}
+
+.message-actions button:hover {
+  background: var(--discord-hover);
+  color: var(--discord-text);
+}
+
+.message-edit {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.message-edit textarea {
+  min-height: 42px;
+  max-height: 160px;
+  resize: vertical;
+  border: 1px solid var(--discord-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--discord-input);
+  color: var(--discord-text);
+  line-height: 1.45;
+}
+
+.message-edit-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.message-edit-actions button {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 7px;
+  background: var(--discord-muted-surface);
+  color: var(--discord-text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.message-edit-actions button[type='submit'] {
+  background: var(--discord-brand);
+  color: white;
 }
 
 .attachments {

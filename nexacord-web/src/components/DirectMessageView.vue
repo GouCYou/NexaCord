@@ -29,7 +29,7 @@
         class="header-action"
         type="button"
         title="发起语音呼叫"
-        :disabled="!currentConversation"
+        :disabled="!currentConversation || isDirectCallPending"
         @click="startCall"
       >
         <PhoneCall :size="18" aria-hidden="true" />
@@ -37,7 +37,7 @@
     </header>
 
     <main ref="messagesContainer" class="direct-messages">
-      <div v-if="isLoading" class="state-block">正在加载私信……</div>
+      <div v-if="isLoading && currentMessages.length === 0" class="state-block">正在加载私信……</div>
       <div v-else-if="error" class="state-block error">{{ error }}</div>
       <div v-else-if="!currentConversation" class="state-block">这条私信会话不存在，或者你没有访问权限。</div>
 
@@ -65,42 +65,105 @@
                 {{ displayUserName(message.author) }}
               </button>
               <span>{{ formatTime(message.createdAt) }}</span>
+              <em v-if="message.edited">(已编辑)</em>
             </header>
-            <p>{{ message.content }}</p>
+
+            <form v-if="editingMessageId === message.id" class="message-edit" @submit.prevent="saveMessageEdit(message.id)">
+              <textarea
+                v-model="editingContent"
+                rows="1"
+                @keydown.enter.exact.prevent="saveMessageEdit(message.id)"
+                @keydown.esc.prevent="cancelMessageEdit"
+              ></textarea>
+              <div class="message-edit-actions">
+                <button type="button" @click="cancelMessageEdit">取消</button>
+                <button type="submit" :disabled="!editingContent.trim()">保存</button>
+              </div>
+            </form>
+
+            <p v-else-if="message.content">{{ message.content }}</p>
+
+            <div v-if="(message.attachments?.length ?? 0) > 0" class="attachments">
+              <ImageAttachment
+                v-for="attachment in imageAttachments(message.attachments || [])"
+                :key="attachment.id"
+                :source-url="attachment.url"
+                :alt="attachment.fileName"
+                @preview="openImagePreview"
+              />
+            </div>
+          </div>
+          <div v-if="message.author.id === currentUser?.id" class="message-actions">
+            <button type="button" title="编辑消息" @click="startMessageEdit(message)">
+              <Pencil :size="15" aria-hidden="true" />
+            </button>
+            <button type="button" title="删除消息" @click="deleteMessage(message.id)">
+              <Trash2 :size="15" aria-hidden="true" />
+            </button>
           </div>
         </article>
       </template>
     </main>
 
     <footer v-if="currentConversation" class="direct-composer">
-      <textarea
-        ref="composerTextarea"
-        v-model="draft"
-        rows="1"
-        :placeholder="`发送私信给 ${displayUserName(currentConversation.otherUser)}`"
-        @input="autoResizeComposer"
-        @keydown.enter.exact.prevent="sendCurrentMessage"
-        @keydown.enter.shift="handleShiftEnter"
-      ></textarea>
-      <button type="button" :disabled="isSending || !draft.trim()" @click="sendCurrentMessage">
-        <Send :size="17" aria-hidden="true" />
-        <span>{{ isSending ? '发送中' : '发送' }}</span>
-      </button>
+      <div v-if="pendingFiles.length > 0" class="pending-files">
+        <div
+          v-for="(file, index) in pendingFiles"
+          :key="`${file.name}-${file.size}-${index}`"
+          class="pending-file"
+        >
+          <img class="pending-image" :src="filePreviewUrl(file)" :alt="file.name" />
+          <span class="pending-file-copy">
+            <strong>{{ file.name }}</strong>
+            <small>{{ formatFileSize(file.size) }}</small>
+          </span>
+          <button type="button" class="pending-file-remove" aria-label="移除附件" @click="removePendingFile(index)">
+            <X :size="16" aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+
+      <div class="composer-input">
+        <input ref="fileInput" class="visually-hidden" type="file" accept="image/*" multiple @change="handleFileSelection" />
+        <button class="attach-button" type="button" title="添加图片" :disabled="isUploading" @click="openFilePicker">
+          <Paperclip :size="19" aria-hidden="true" />
+        </button>
+        <textarea
+          ref="composerTextarea"
+          v-model="draft"
+          rows="1"
+          :placeholder="`发送私信给 ${displayUserName(currentConversation.otherUser)}`"
+          @input="autoResizeComposer"
+          @keydown.enter.exact.prevent="sendCurrentMessage"
+          @keydown.enter.shift="handleShiftEnter"
+        ></textarea>
+        <button type="button" :disabled="isSending || isUploading || !canSend" @click="sendCurrentMessage">
+          <Send :size="17" aria-hidden="true" />
+          <span>{{ sendButtonLabel }}</span>
+        </button>
+      </div>
+      <p v-if="composerError" class="composer-error">{{ composerError }}</p>
     </footer>
+
+    <ImagePreviewModal :image-url="previewImageUrl" @close="closeImagePreview" />
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import dayjs from 'dayjs';
 import 'dayjs/locale/zh-cn';
-import { PhoneCall, Send } from 'lucide-vue-next';
+import { Paperclip, Pencil, PhoneCall, Send, Trash2, X } from 'lucide-vue-next';
+import ImageAttachment from './ImageAttachment.vue';
+import ImagePreviewModal from './ImagePreviewModal.vue';
+import fileService from '../services/fileService';
+import type { DirectMessageCreateAttachment } from '../services/directMessageService';
 import { useDirectMessageStore } from '../stores/directMessageStore';
 import { useUserStore } from '../stores/userStore';
 import { useVoiceStore } from '../stores/voiceStore';
-import type { User } from '../types';
+import type { Attachment, DirectMessage, User } from '../types';
 import { displayUserLabel } from '../utils/userDisplay';
 
 dayjs.locale('zh-cn');
@@ -115,7 +178,17 @@ const { currentConversation, currentMessages, isLoading, isSending, error } = st
 const defaultAvatarUrl = '/logo.png';
 const messagesContainer = ref<HTMLElement | null>(null);
 const composerTextarea = ref<HTMLTextAreaElement | null>(null);
+const fileInput = ref<HTMLInputElement | null>(null);
 const draft = ref('');
+const pendingFiles = ref<File[]>([]);
+const isUploading = ref(false);
+const localError = ref<string | null>(null);
+const editingMessageId = ref<number | null>(null);
+const editingContent = ref('');
+const previewImageUrl = ref<string | null>(null);
+const previewUrls = new Map<File, string>();
+
+const { outgoingCall } = storeToRefs(voiceStore);
 
 const conversationId = computed(() => {
   const parsedId = Number.parseInt(route.params.conversationId as string, 10);
@@ -123,6 +196,17 @@ const conversationId = computed(() => {
 });
 
 const displayUserName = (user: Pick<User, 'username' | 'displayName'>) => displayUserLabel(user);
+
+const isDirectCallPending = computed(() => Boolean(outgoingCall.value));
+const canSend = computed(() => draft.value.trim().length > 0 || pendingFiles.value.length > 0);
+const composerError = computed(() => localError.value || error.value);
+const sendButtonLabel = computed(() => {
+  if (isUploading.value) {
+    return '上传中……';
+  }
+
+  return isSending.value ? '发送中' : '发送';
+});
 
 const statusLabel = (status: User['status']) => {
   const labels = {
@@ -181,16 +265,193 @@ const handleShiftEnter = (event: KeyboardEvent) => {
 };
 
 const sendCurrentMessage = async () => {
-  if (!conversationId.value || !draft.value.trim()) {
+  const content = draft.value.trim();
+  if (!conversationId.value || (!content && pendingFiles.value.length === 0)) {
     return;
   }
 
-  const success = await directMessageStore.sendMessage(conversationId.value, draft.value);
-  if (success) {
-    draft.value = '';
-    autoResizeComposer();
-    scrollToBottom();
+  localError.value = null;
+  let uploadedAttachments: DirectMessageCreateAttachment[] = [];
+
+  try {
+    uploadedAttachments = await uploadPendingFiles();
+    const success = await directMessageStore.sendMessage(conversationId.value, content, uploadedAttachments);
+    if (success) {
+      resetComposer();
+      scrollToBottom();
+      return;
+    }
+
+    await cleanupUploadedFiles(uploadedAttachments);
+  } catch (uploadError: any) {
+    const attachmentsToCleanup = uploadError?.uploadedAttachments || uploadedAttachments;
+    await cleanupUploadedFiles(attachmentsToCleanup);
+    localError.value =
+      uploadError?.response?.data?.error ||
+      uploadError?.response?.data?.message ||
+      uploadError?.message ||
+      '上传所选图片失败。';
   }
+};
+
+const isImageAttachment = (attachment: Attachment) =>
+  attachment.fileType?.startsWith('image/') || /\.(png|jpe?g|gif|webp|avif|svg)$/i.test(attachment.url);
+
+const imageAttachments = (attachments: Attachment[]) => attachments.filter(isImageAttachment);
+
+const isImageFile = (file: File) => file.type.startsWith('image/');
+
+const formatFileSize = (bytes: number): string => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1073741824) return `${(bytes / 1048576).toFixed(1)} MB`;
+  return `${(bytes / 1073741824).toFixed(1)} GB`;
+};
+
+const filePreviewUrl = (file: File) => {
+  const existingUrl = previewUrls.get(file);
+  if (existingUrl) {
+    return existingUrl;
+  }
+
+  const url = URL.createObjectURL(file);
+  previewUrls.set(file, url);
+  return url;
+};
+
+const revokeFilePreview = (file: File) => {
+  const url = previewUrls.get(file);
+  if (url) {
+    URL.revokeObjectURL(url);
+    previewUrls.delete(file);
+  }
+};
+
+const revokeAllFilePreviews = () => {
+  previewUrls.forEach((url) => URL.revokeObjectURL(url));
+  previewUrls.clear();
+};
+
+const resetFileInput = () => {
+  if (fileInput.value) {
+    fileInput.value.value = '';
+  }
+};
+
+const openFilePicker = () => {
+  fileInput.value?.click();
+};
+
+const handleFileSelection = (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const selectedFiles = Array.from(input.files || []);
+  if (selectedFiles.length === 0) {
+    return;
+  }
+
+  const nonImageFile = selectedFiles.find((file) => !isImageFile(file));
+  if (nonImageFile) {
+    localError.value = '当前只能发送图片。';
+    resetFileInput();
+    return;
+  }
+
+  const existingKeys = new Set(
+    pendingFiles.value.map((file) => `${file.name}-${file.size}-${file.lastModified}`)
+  );
+  pendingFiles.value = [
+    ...pendingFiles.value,
+    ...selectedFiles.filter((file) => !existingKeys.has(`${file.name}-${file.size}-${file.lastModified}`)),
+  ];
+  localError.value = null;
+  resetFileInput();
+};
+
+const removePendingFile = (index: number) => {
+  const removedFile = pendingFiles.value[index];
+  if (removedFile) {
+    revokeFilePreview(removedFile);
+  }
+  pendingFiles.value = pendingFiles.value.filter((_, currentIndex) => currentIndex !== index);
+};
+
+const uploadPendingFiles = async (): Promise<DirectMessageCreateAttachment[]> => {
+  if (pendingFiles.value.length === 0) {
+    return [];
+  }
+
+  isUploading.value = true;
+  const uploadedAttachments: DirectMessageCreateAttachment[] = [];
+
+  try {
+    for (const file of pendingFiles.value) {
+      uploadedAttachments.push({
+        fileName: file.name,
+        fileType: file.type || 'image/*',
+        fileSize: file.size,
+        url: await fileService.uploadFile(file),
+      });
+    }
+    return uploadedAttachments;
+  } catch (uploadError: any) {
+    uploadError.uploadedAttachments = uploadedAttachments;
+    throw uploadError;
+  } finally {
+    isUploading.value = false;
+  }
+};
+
+const cleanupUploadedFiles = async (attachments: DirectMessageCreateAttachment[]) => {
+  await Promise.allSettled(attachments.map((attachment) => fileService.deleteFile(attachment.url)));
+};
+
+const resetComposer = () => {
+  draft.value = '';
+  pendingFiles.value = [];
+  revokeAllFilePreviews();
+  resetFileInput();
+  autoResizeComposer();
+};
+
+const openImagePreview = (url: string) => {
+  previewImageUrl.value = url;
+};
+
+const closeImagePreview = () => {
+  previewImageUrl.value = null;
+};
+
+const startMessageEdit = (message: DirectMessage) => {
+  editingMessageId.value = message.id;
+  editingContent.value = message.content;
+};
+
+const cancelMessageEdit = () => {
+  editingMessageId.value = null;
+  editingContent.value = '';
+};
+
+const saveMessageEdit = async (messageId: number) => {
+  if (!conversationId.value || !editingContent.value.trim()) {
+    return;
+  }
+
+  const success = await directMessageStore.updateMessage(
+    conversationId.value,
+    messageId,
+    editingContent.value.trim()
+  );
+  if (success) {
+    cancelMessageEdit();
+  }
+};
+
+const deleteMessage = async (messageId: number) => {
+  if (!conversationId.value) {
+    return;
+  }
+
+  await directMessageStore.deleteMessage(conversationId.value, messageId);
 };
 
 const openUserPopover = (user: User, event: MouseEvent) => {
@@ -230,9 +491,14 @@ watch(currentMessages, scrollToBottom, { deep: true });
 watch(draft, autoResizeComposer);
 
 onMounted(() => {
+  voiceStore.initializeRealtime();
   directMessageStore.initializeRealtime();
   autoResizeComposer();
   scrollToBottom();
+});
+
+onBeforeUnmount(() => {
+  revokeAllFilePreviews();
 });
 </script>
 
@@ -405,6 +671,7 @@ onMounted(() => {
 }
 
 .message-row {
+  position: relative;
   display: grid;
   grid-template-columns: 48px minmax(0, 1fr);
   gap: 14px;
@@ -454,6 +721,12 @@ onMounted(() => {
   font-size: 12px;
 }
 
+.message-body header em {
+  color: var(--discord-text-faint);
+  font-size: 12px;
+  font-style: italic;
+}
+
 .message-body p {
   margin-top: 4px;
   color: var(--discord-text);
@@ -462,44 +735,208 @@ onMounted(() => {
   word-break: break-word;
 }
 
+.attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.message-actions {
+  position: absolute;
+  top: -8px;
+  right: 18px;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--discord-border);
+  border-radius: 8px;
+  background: var(--discord-elevated);
+  box-shadow: var(--discord-shadow);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.message-row:hover .message-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.message-actions button {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  color: var(--discord-text-muted);
+}
+
+.message-actions button:hover {
+  background: var(--discord-hover);
+  color: var(--discord-text);
+}
+
+.message-edit {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.message-edit textarea {
+  min-height: 42px;
+  max-height: 160px;
+  resize: vertical;
+  border: 1px solid var(--discord-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--discord-input);
+  color: var(--discord-text);
+}
+
+.message-edit-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.message-edit-actions button {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 7px;
+  background: var(--discord-muted-surface);
+  color: var(--discord-text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.message-edit-actions button[type='submit'] {
+  background: var(--discord-brand);
+  color: white;
+}
+
 .direct-composer {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
   gap: 10px;
   padding: 14px 18px 18px;
 }
 
-.direct-composer textarea {
-  min-height: 46px;
-  max-height: 160px;
-  resize: none;
-  border: 1px solid var(--discord-border);
-  border-radius: 10px;
-  padding: 13px 14px;
+.pending-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pending-file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--discord-muted-surface);
+}
+
+.pending-image {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  object-fit: cover;
   background: var(--discord-input);
+}
+
+.pending-file-copy {
+  display: grid;
+  gap: 2px;
+}
+
+.pending-file-copy strong {
+  font-size: 13px;
+}
+
+.pending-file-copy small {
+  color: var(--discord-text-faint);
+}
+
+.pending-file-remove {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--discord-hover);
+  color: var(--discord-text-muted);
+}
+
+.composer-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 64px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--discord-surface-soft);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.attach-button {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  background: var(--discord-hover);
+  color: var(--discord-text);
+}
+
+.direct-composer textarea {
+  flex: 1;
+  min-height: 28px;
+  max-height: 180px;
+  resize: none;
+  border: 0;
+  padding: 6px 0;
+  background: transparent;
   color: var(--discord-text);
   line-height: 1.45;
 }
 
-.direct-composer button {
-  min-height: 46px;
+.direct-composer textarea:focus {
+  outline: none;
+}
+
+.composer-input > button:last-child {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 0 18px;
+  padding: 10px 16px;
   border-radius: 10px;
   background: var(--discord-brand);
   color: white;
   font-weight: 900;
 }
 
-.direct-composer button:hover:not(:disabled) {
+.composer-input > button:last-child:hover:not(:disabled) {
   background: var(--discord-brand-hover);
 }
 
 .direct-composer button:disabled {
   cursor: not-allowed;
   opacity: 0.58;
+}
+
+.composer-error {
+  margin: 0;
+  color: #ff8b8d;
+  font-size: 13px;
 }
 </style>

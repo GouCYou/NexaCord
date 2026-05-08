@@ -36,9 +36,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { storeToRefs } from 'pinia';
 import { useServerStore } from '../stores/serverStore';
-import type { Member, MemberRole } from '../types';
+import { useUserStore } from '../stores/userStore';
+import websocketService from '../services/websocketService';
+import type { Member, MemberRole, User } from '../types';
 import { usernameTag } from '../utils/userDisplay';
 
 const props = defineProps<{
@@ -46,6 +49,8 @@ const props = defineProps<{
 }>();
 
 const serverStore = useServerStore();
+const userStore = useUserStore();
+const { currentUser } = storeToRefs(userStore);
 const members = ref<Member[]>([]);
 const isLoading = ref(false);
 const defaultAvatarUrl = '/logo.png';
@@ -67,6 +72,7 @@ const openUserPopover = (member: Member, event: MouseEvent) => {
       user: member.user,
       role: member.role,
       serverName: serverStore.currentServer?.name,
+      serverIconUrl: serverStore.currentServer?.iconUrl,
       x: event.clientX,
       y: event.clientY,
     },
@@ -98,8 +104,55 @@ const loadMembers = async () => {
   }
 };
 
-onMounted(loadMembers);
+const handleUserStatusRealtime = (_event: unknown, payload: unknown) => {
+  const author = (payload as { author?: { id?: number; status?: User['status'] } })?.author;
+  if (!author?.id || !author.status) {
+    return;
+  }
+
+  members.value = members.value.map((member) =>
+    member.user.id === author.id
+      ? {
+          ...member,
+          user: {
+            ...member.user,
+            status: author.status as User['status'],
+          },
+        }
+      : member
+  );
+};
+
+onMounted(() => {
+  void loadMembers();
+  websocketService.on('user:status:update', handleUserStatusRealtime);
+});
+
+onBeforeUnmount(() => {
+  websocketService.off('user:status:update', handleUserStatusRealtime);
+});
 watch(() => props.serverId, loadMembers);
+watch(
+  currentUser,
+  (user) => {
+    if (!user) {
+      return;
+    }
+
+    members.value = members.value.map((member) =>
+      member.user.id === user.id
+        ? {
+            ...member,
+            user: {
+              ...member.user,
+              status: user.status,
+            },
+          }
+        : member
+    );
+  },
+  { deep: true }
+);
 </script>
 
 <style scoped>

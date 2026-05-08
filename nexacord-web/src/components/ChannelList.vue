@@ -114,7 +114,7 @@
                   >
                     <Volume2 class="channel-prefix" :size="18" aria-hidden="true" />
                     <span class="channel-label">{{ channel.name }}</span>
-                    <span v-if="activeVoiceChannelId === channel.id" class="voice-duration">{{ voiceParticipantCount }}</span>
+                    <span v-if="voiceCount(channel.id) > 0" class="voice-duration">{{ voiceCount(channel.id) }}</span>
                   </button>
 
                   <div class="channel-actions">
@@ -127,12 +127,12 @@
                   </div>
                 </div>
 
-                <div v-if="activeVoiceChannelId === channel.id" class="voice-members">
+                <div v-if="voiceParticipants(channel.id).length > 0" class="voice-members">
                   <div
-                    v-for="participant in visibleVoiceParticipants"
+                    v-for="participant in voiceParticipants(channel.id)"
                     :key="participant.id"
                     class="voice-member"
-                    :class="{ speaking: isUserSpeaking(participant.id) }"
+                    :class="{ speaking: activeVoiceChannelId === channel.id && isUserSpeaking(participant.id) }"
                     :style="voiceLevelStyle(participant.id)"
                   >
                     <button class="voice-member-avatar" type="button" @click.stop="openVoiceUserPopover(participant, $event)">
@@ -240,10 +240,8 @@ const { currentServer, currentServerId } = storeToRefs(serverStore);
 const { channels, currentChannelId, isLoading, error } = storeToRefs(channelStore);
 const {
   activeChannelId: activeVoiceChannelId,
-  participantCount: voiceParticipantCount,
-  visibleParticipants: visibleVoiceParticipants,
 } = storeToRefs(voiceStore);
-const { displayNameOf, getVoiceLevel, isUserSpeaking } = voiceStore;
+const { displayNameOf, getParticipantCountForChannel, getParticipantsForChannel, getVoiceLevel, isUserSpeaking } = voiceStore;
 
 const showCreateChannelModal = ref(false);
 const showServerMenu = ref(false);
@@ -267,6 +265,9 @@ const voiceChannels = computed(() => channels.value.filter((channel) => channel.
 const voiceLevelStyle = (userId: number) => ({
   '--voice-level': Math.max(0.18, getVoiceLevel(userId)).toFixed(2),
 });
+
+const voiceCount = (channelId: number) => getParticipantCountForChannel(channelId);
+const voiceParticipants = (channelId: number) => getParticipantsForChannel(channelId);
 
 const openCreateChannelModal = () => {
   if (!currentServerId.value) {
@@ -313,6 +314,7 @@ const openVoiceUserPopover = (user: VoiceUser, event: MouseEvent) => {
     detail: {
       user,
       serverName: currentServer.value?.name,
+      serverIconUrl: currentServer.value?.iconUrl,
       x: event.clientX,
       y: event.clientY,
     },
@@ -396,6 +398,7 @@ const logout = () => {
 };
 
 onMounted(() => {
+  voiceStore.initializeRealtime();
   window.addEventListener('nexacord:create-channel', openCreateChannelModal);
   window.addEventListener('click', closeServerMenu);
 });

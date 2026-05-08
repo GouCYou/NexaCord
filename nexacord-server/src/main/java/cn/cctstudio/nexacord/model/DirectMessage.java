@@ -7,6 +7,8 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 @Entity
 @Table(
@@ -61,4 +63,9 @@ public class DirectMessage {
     @Column(name = "is_deleted", nullable = false)
     @Builder.Default
     private Boolean deleted = Boolean.FALSE;
+
+    @OneToMany(mappedBy = "message", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnoreProperties({"message"})
+    @Builder.Default
+    private Set<DirectAttachment> attachments = new LinkedHashSet<>();
 }
