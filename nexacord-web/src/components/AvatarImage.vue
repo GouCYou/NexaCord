@@ -99,16 +99,15 @@ function drawAvatar(image: HTMLImageElement) {
   context.fillRect(0, 0, size, size);
 
   const visibleBounds = getVisibleBounds(image);
-  drawCover(context, image, visibleBounds, size, 1);
+  drawSquareAvatar(context, image, visibleBounds, size);
   context.restore();
 }
 
-function drawCover(
+function drawSquareAvatar(
   context: CanvasRenderingContext2D,
   image: HTMLImageElement,
   sourceBounds: SourceBounds | null,
-  size: number,
-  scaleMultiplier: number
+  size: number
 ) {
   const bounds = sourceBounds ?? {
     x: 0,
@@ -116,12 +115,9 @@ function drawCover(
     width: image.naturalWidth,
     height: image.naturalHeight,
   };
-  const imageScale = Math.max(size / bounds.width, size / bounds.height) * scaleMultiplier;
-  const width = bounds.width * imageScale;
-  const height = bounds.height * imageScale;
-  const x = (size - width) / 2;
-  const y = (size - height) / 2;
-  context.drawImage(image, bounds.x, bounds.y, bounds.width, bounds.height, x, y, width, height);
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = 'high';
+  context.drawImage(image, bounds.x, bounds.y, bounds.width, bounds.height, 0, 0, size, size);
 }
 
 function getVisibleBounds(image: HTMLImageElement): SourceBounds | null {
@@ -166,15 +162,36 @@ function getVisibleBounds(image: HTMLImageElement): SourceBounds | null {
     const padding = 2;
     const sourceX = Math.max(0, (minX - padding) / scale);
     const sourceY = Math.max(0, (minY - padding) / scale);
-    return {
+    const visibleBounds = {
       x: sourceX,
       y: sourceY,
       width: Math.min(image.naturalWidth - sourceX, (maxX - minX + 1 + padding * 2) / scale),
       height: Math.min(image.naturalHeight - sourceY, (maxY - minY + 1 + padding * 2) / scale),
     };
+
+    return toSquareBounds(visibleBounds, image.naturalWidth, image.naturalHeight);
   } catch {
     return null;
   }
+}
+
+function toSquareBounds(bounds: SourceBounds, imageWidth: number, imageHeight: number): SourceBounds {
+  const side = Math.min(Math.max(bounds.width, bounds.height), imageWidth, imageHeight);
+  const centerX = bounds.x + bounds.width / 2;
+  const centerY = bounds.y + bounds.height / 2;
+  const x = clamp(centerX - side / 2, 0, imageWidth - side);
+  const y = clamp(centerY - side / 2, 0, imageHeight - side);
+
+  return {
+    x,
+    y,
+    width: side,
+    height: side,
+  };
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
 }
 
 function retryLoad() {

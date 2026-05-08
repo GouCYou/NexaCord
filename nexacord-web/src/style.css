@@ -126,6 +126,9 @@ img {
 .voice-member-avatar,
 .welcome-avatar {
   background: var(--discord-avatar-bg) !important;
+  border: 0;
+  flex: none;
+  padding: 0;
 }
 
 .avatar img,
