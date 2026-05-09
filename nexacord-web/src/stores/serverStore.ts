@@ -191,9 +191,9 @@ export const useServerStore = defineStore('server', () => {
     }
   };
 
-  const createServerInvite = async (serverId: number): Promise<ServerInvite | null> => {
+  const createServerInvite = async (serverId: number, channelId?: number | null): Promise<ServerInvite | null> => {
     try {
-      return await serverService.createInvite(serverId);
+      return await serverService.createInvite(serverId, channelId);
     } catch (err: any) {
       error.value =
         err.response?.data?.error ||

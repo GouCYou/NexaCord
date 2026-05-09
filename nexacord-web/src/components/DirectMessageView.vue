@@ -91,8 +91,8 @@
                 <ServerIcon v-else :size="24" aria-hidden="true" />
               </div>
               <div class="invite-copy">
-                <span>服务器邀请</span>
-                <strong>{{ invitePayload(message.content)?.serverName }}</strong>
+                <span>{{ inviteTypeLabel(message) }}</span>
+                <strong>{{ inviteTargetName(message) }}</strong>
                 <small>{{ inviteStateLabel(message) }}</small>
               </div>
               <div class="invite-actions">
@@ -187,7 +187,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import dayjs from 'dayjs';
 import 'dayjs/locale/zh-cn';
@@ -197,6 +197,7 @@ import ImagePreviewModal from './ImagePreviewModal.vue';
 import fileService from '../services/fileService';
 import serverService from '../services/serverService';
 import type { DirectMessageCreateAttachment } from '../services/directMessageService';
+import { useChannelStore } from '../stores/channelStore';
 import { useDirectMessageStore } from '../stores/directMessageStore';
 import { useServerStore } from '../stores/serverStore';
 import { useUserStore } from '../stores/userStore';
@@ -208,11 +209,14 @@ import { displayUserLabel } from '../utils/userDisplay';
 dayjs.locale('zh-cn');
 
 const route = useRoute();
+const router = useRouter();
 const directMessageStore = useDirectMessageStore();
+const channelStore = useChannelStore();
 const serverStore = useServerStore();
 const userStore = useUserStore();
 const voiceStore = useVoiceStore();
 const { currentUser } = storeToRefs(userStore);
+const { servers } = storeToRefs(serverStore);
 const { currentConversation, currentMessages, isLoading, isSending, error } = storeToRefs(directMessageStore);
 
 const defaultAvatarUrl = '/logo.png';
@@ -280,8 +284,33 @@ const persistInviteStates = () => {
 const invitePayload = (content: string) => parseDirectInviteMessage(content);
 const inviteStateKey = (message: DirectMessage) => `${message.id}:${invitePayload(message.content)?.code || ''}`;
 const inviteState = (message: DirectMessage) => inviteStates.value[inviteStateKey(message)];
-const isInviteResolved = (message: DirectMessage) => Boolean(inviteState(message));
+const isInviteAlreadyMember = (message: DirectMessage) => {
+  const invite = invitePayload(message.content);
+  return Boolean(invite && servers.value.some((server) => server.id === invite.serverId));
+};
+const isInviteResolved = (message: DirectMessage) => Boolean(inviteState(message)) || isInviteAlreadyMember(message);
+const inviteTypeLabel = (message: DirectMessage) => {
+  const invite = invitePayload(message.content);
+  return invite?.channelId ? '频道邀请' : '服务器邀请';
+};
+const inviteTargetName = (message: DirectMessage) => {
+  const invite = invitePayload(message.content);
+  if (!invite) {
+    return '';
+  }
+
+  if (invite.channelId && invite.channelName) {
+    return `${invite.channelType === 'VOICE' ? '语音频道' : '#'} ${invite.channelName}`;
+  }
+
+  return invite.serverName;
+};
 const inviteStateLabel = (message: DirectMessage) => {
+  if (isInviteAlreadyMember(message)) {
+    const invite = invitePayload(message.content);
+    return invite?.channelId ? '你已经是该频道成员。' : '你已经是该服务器成员。';
+  }
+
   const state = inviteState(message);
   if (state === 'accepted') {
     return '你已接受这个邀请。';
@@ -289,7 +318,11 @@ const inviteStateLabel = (message: DirectMessage) => {
   if (state === 'declined') {
     return '你已拒绝这个邀请。';
   }
-  return '在私信中选择是否加入这个服务器。';
+
+  const invite = invitePayload(message.content);
+  return invite?.channelId
+    ? `加入 ${invite.serverName} 并进入这个频道。`
+    : '在私信中选择是否加入这个服务器。';
 };
 
 const setInviteState = (message: DirectMessage, state: 'accepted' | 'declined') => {
@@ -307,9 +340,17 @@ const acceptInviteMessage = async (message: DirectMessage) => {
   }
 
   try {
-    await serverService.joinInvite(invite.code);
+    const server = await serverService.joinInvite(invite.code);
     await serverStore.fetchServers(invite.serverId);
     setInviteState(message, 'accepted');
+    if (invite.channelId) {
+      await channelStore.fetchChannels(server.id, invite.channelId);
+      channelStore.setCurrentChannel(invite.channelId);
+      router.push(`/servers/${server.id}/channels/${invite.channelId}`);
+      return;
+    }
+
+    router.push(`/servers/${server.id}`);
   } catch {
     localError.value = '接受服务器邀请失败，这个邀请可能已经失效。';
   }

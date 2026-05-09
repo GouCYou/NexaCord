@@ -14,6 +14,8 @@ public interface ServerInviteRepository extends JpaRepository<ServerInvite, Long
             select invite from ServerInvite invite
             join fetch invite.server
             join fetch invite.creator
+            left join fetch invite.targetChannel targetChannel
+            left join fetch targetChannel.server
             where invite.code = :code
             """)
     Optional<ServerInvite> findByCodeWithServerAndCreator(@Param("code") String code);

@@ -8,6 +8,8 @@ import LoginView from '../views/LoginView.vue';
 import MainView from '../views/MainView.vue';
 import RegisterView from '../views/RegisterView.vue';
 
+const initialBrowserPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+
 if (window.location.pathname !== '/') {
   window.history.replaceState(window.history.state, '', '/');
 }
@@ -89,6 +91,16 @@ const router = createRouter({
   history: createMemoryHistory(import.meta.env.BASE_URL),
   routes,
 });
+
+export const restoreInitialBrowserRoute = () => {
+  if (initialBrowserPath === '/' || initialBrowserPath === '') {
+    return;
+  }
+
+  if (router.currentRoute.value.fullPath !== initialBrowserPath) {
+    void router.replace(initialBrowserPath);
+  }
+};
 
 router.beforeEach((to, _from, next) => {
   const isAuthenticated = authService.isAuthenticated();

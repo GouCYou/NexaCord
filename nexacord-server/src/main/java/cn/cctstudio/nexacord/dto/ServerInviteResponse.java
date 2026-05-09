@@ -14,24 +14,37 @@ public class ServerInviteResponse {
     private Long serverId;
     private String serverName;
     private String serverIconUrl;
+    private Long channelId;
+    private String channelName;
+    private String channelType;
     private String creatorName;
     private Instant expiresAt;
     private Integer maxUses;
     private Integer useCount;
     private Instant createdAt;
+    private boolean member;
 
     public static ServerInviteResponse from(ServerInvite invite) {
+        return from(invite, false);
+    }
+
+    public static ServerInviteResponse from(ServerInvite invite, boolean member) {
+        var targetChannel = invite.getTargetChannel();
         return ServerInviteResponse.builder()
                 .id(invite.getId())
                 .code(invite.getCode())
                 .serverId(invite.getServer().getId())
                 .serverName(invite.getServer().getName())
                 .serverIconUrl(invite.getServer().getIconUrl())
+                .channelId(targetChannel != null ? targetChannel.getId() : null)
+                .channelName(targetChannel != null ? targetChannel.getName() : null)
+                .channelType(targetChannel != null ? targetChannel.getType().name() : null)
                 .creatorName(invite.getCreator().getUsername())
                 .expiresAt(invite.getExpiresAt())
                 .maxUses(invite.getMaxUses())
                 .useCount(invite.getUseCount())
                 .createdAt(invite.getCreatedAt())
+                .member(member)
                 .build();
     }
 }

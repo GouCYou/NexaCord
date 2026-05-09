@@ -6,6 +6,9 @@ export type DirectInvitePayload = {
   serverId: number;
   serverName: string;
   serverIconUrl: string | null;
+  channelId?: number | null;
+  channelName?: string | null;
+  channelType?: 'TEXT' | 'VOICE' | 'CATEGORY' | null;
   creatorName?: string;
 };
 
@@ -18,6 +21,9 @@ export const buildDirectInviteMessage = (invite: ServerInvite): string =>
     serverId: invite.serverId,
     serverName: invite.serverName,
     serverIconUrl: invite.serverIconUrl,
+    channelId: invite.channelId ?? null,
+    channelName: invite.channelName ?? null,
+    channelType: invite.channelType ?? null,
     creatorName: invite.creatorName,
   } satisfies DirectInvitePayload)}`;
 

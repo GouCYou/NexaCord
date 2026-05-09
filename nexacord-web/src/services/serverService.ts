@@ -48,8 +48,10 @@ class ServerService {
     return api.delete(`/servers/${serverId}/members/${memberId}`);
   }
 
-  async createInvite(serverId: number): Promise<ServerInvite> {
-    return api.post<ServerInvite>(`/servers/${serverId}/invites`);
+  async createInvite(serverId: number, channelId?: number | null): Promise<ServerInvite> {
+    return api.post<ServerInvite>(`/servers/${serverId}/invites`, undefined, {
+      params: channelId ? { channelId } : undefined,
+    });
   }
 
   async getInvite(code: string): Promise<ServerInvite> {

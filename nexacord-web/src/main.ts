@@ -4,7 +4,7 @@ import 'element-plus/dist/index.css';
 import './style.css';
 import App from './App.vue';
 import AvatarImage from './components/AvatarImage.vue';
-import router from './router';
+import router, { restoreInitialBrowserRoute } from './router';
 import { useThemeStore } from './stores/themeStore';
 import { useUserStore } from './stores/userStore';
 
@@ -19,6 +19,7 @@ const userStore = useUserStore();
 const themeStore = useThemeStore();
 themeStore.initializeTheme();
 userStore.initializeUser();
+restoreInitialBrowserRoute();
 
 window.addEventListener('nexacord:auth-expired', () => {
   if (router.currentRoute.value.name !== 'Login') {

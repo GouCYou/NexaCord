@@ -40,11 +40,15 @@ export interface ServerInvite {
   serverId: number;
   serverName: string;
   serverIconUrl: string | null;
+  channelId?: number | null;
+  channelName?: string | null;
+  channelType?: Channel['type'] | null;
   creatorName: string;
   expiresAt: string | null;
   maxUses: number | null;
   useCount: number | null;
   createdAt: string;
+  member?: boolean;
 }
 
 export interface Channel {

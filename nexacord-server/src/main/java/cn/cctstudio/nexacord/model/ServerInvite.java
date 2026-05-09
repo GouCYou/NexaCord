@@ -34,6 +34,11 @@ public class ServerInvite {
     @JsonIgnore
     private User creator;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "target_channel_id")
+    @JsonIgnore
+    private Channel targetChannel;
+
     private Instant expiresAt;
     private Integer maxUses;
     private Integer useCount;

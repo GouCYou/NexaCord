@@ -256,7 +256,9 @@ const deleteChannel = async () => {
 };
 
 const openInvite = () => {
-  window.dispatchEvent(new CustomEvent('nexacord:open-invite'));
+  window.dispatchEvent(new CustomEvent('nexacord:open-invite', {
+    detail: { channelId: props.channel.id },
+  }));
 };
 
 watch(() => props.channel.id, resetForm, { immediate: true });

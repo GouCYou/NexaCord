@@ -306,7 +306,9 @@ const openInviteModal = () => {
 
 const openChannelInvite = (channelId: number) => {
   selectChannel(channelId);
-  window.dispatchEvent(new CustomEvent('nexacord:open-invite'));
+  window.dispatchEvent(new CustomEvent('nexacord:open-invite', {
+    detail: { channelId },
+  }));
 };
 
 const joinVoiceChannel = (channel: Channel) => {

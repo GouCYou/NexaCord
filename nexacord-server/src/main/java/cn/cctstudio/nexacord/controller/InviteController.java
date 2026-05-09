@@ -3,6 +3,7 @@ package cn.cctstudio.nexacord.controller;
 import cn.cctstudio.nexacord.dto.ServerInviteResponse;
 import cn.cctstudio.nexacord.exception.BadRequestException;
 import cn.cctstudio.nexacord.exception.ResourceNotFoundException;
+import cn.cctstudio.nexacord.model.Channel;
 import cn.cctstudio.nexacord.model.Member;
 import cn.cctstudio.nexacord.model.Server;
 import cn.cctstudio.nexacord.model.ServerInvite;
@@ -27,9 +28,14 @@ public class InviteController {
     private final ServerService serverService;
 
     @GetMapping("/{code}")
-    public ResponseEntity<ServerInviteResponse> getInvite(@PathVariable String code) {
+    public ResponseEntity<ServerInviteResponse> getInvite(
+            @PathVariable String code,
+            @AuthenticationPrincipal User currentUser
+    ) {
         ServerInvite invite = findValidInvite(code);
-        return new ResponseEntity<>(ServerInviteResponse.from(invite), HttpStatus.OK);
+        boolean isMember = currentUser != null
+                && memberRepository.existsByServerIdAndUserId(invite.getServer().getId(), currentUser.getId());
+        return new ResponseEntity<>(ServerInviteResponse.from(invite, isMember), HttpStatus.OK);
     }
 
     @PostMapping("/{code}/join")
@@ -39,6 +45,10 @@ public class InviteController {
     ) {
         ServerInvite invite = findValidInvite(code);
         Server server = invite.getServer();
+        Channel targetChannel = invite.getTargetChannel();
+        if (targetChannel != null && !targetChannel.getServer().getId().equals(server.getId())) {
+            throw new BadRequestException("邀请目标频道不属于当前服务器。");
+        }
 
         if (!serverService.isServerMember(server.getId(), currentUser.getId())) {
             Member member = Member.builder()

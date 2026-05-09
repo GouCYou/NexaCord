@@ -72,7 +72,7 @@ import friendService from '../services/friendService';
 import { useChannelStore } from '../stores/channelStore';
 import { useDirectMessageStore } from '../stores/directMessageStore';
 import { useServerStore } from '../stores/serverStore';
-import type { Friendship, ServerInvite } from '../types';
+import type { Channel, Friendship, ServerInvite } from '../types';
 import { buildDirectInviteMessage } from '../utils/inviteMessage';
 import { usernameTag } from '../utils/userDisplay';
 
@@ -80,7 +80,7 @@ const serverStore = useServerStore();
 const channelStore = useChannelStore();
 const directMessageStore = useDirectMessageStore();
 const { currentServer, currentServerId } = storeToRefs(serverStore);
-const { currentChannel } = storeToRefs(channelStore);
+const { channels } = storeToRefs(channelStore);
 
 const defaultAvatarUrl = '/logo.png';
 const isOpen = ref(false);
@@ -91,13 +91,18 @@ const currentInvite = ref<ServerInvite | null>(null);
 const invitingUserId = ref<number | null>(null);
 const invitedUserIds = ref(new Set<number>());
 const copyLabel = ref('复制');
+const targetChannel = ref<Channel | null>(null);
+
+type InviteOpenDetail = {
+  channelId?: number | null;
+};
 
 const channelEntryLabel = computed(() => {
-  if (!currentChannel.value) {
+  if (!targetChannel.value) {
     return '服务器首页';
   }
 
-  return `${currentChannel.value.type === 'VOICE' ? '语音频道' : '#'} ${currentChannel.value.name}`;
+  return `${targetChannel.value.type === 'VOICE' ? '语音频道' : '#'} ${targetChannel.value.name}`;
 });
 
 const filteredFriends = computed(() => {
@@ -128,14 +133,16 @@ const loadInvite = async () => {
     return;
   }
 
-  currentInvite.value = await serverStore.createServerInvite(currentServerId.value);
+  currentInvite.value = await serverStore.createServerInvite(currentServerId.value, targetChannel.value?.id ?? null);
 };
 
-const open = async () => {
+const open = async (event?: Event) => {
   if (!currentServerId.value) {
     return;
   }
 
+  const detail = (event as CustomEvent<InviteOpenDetail> | undefined)?.detail;
+  targetChannel.value = resolveTargetChannel(detail?.channelId);
   isOpen.value = true;
   isLoading.value = true;
   searchQuery.value = '';
@@ -156,6 +163,14 @@ const open = async () => {
 const close = () => {
   isOpen.value = false;
   searchQuery.value = '';
+};
+
+const resolveTargetChannel = (channelId?: number | null) => {
+  if (!channelId) {
+    return null;
+  }
+
+  return channels.value.find((channel) => channel.id === channelId && channel.type !== 'CATEGORY') || null;
 };
 
 const inviteFriend = async (userId: number) => {

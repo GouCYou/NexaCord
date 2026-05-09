@@ -135,12 +135,14 @@ CREATE TABLE server_invites (
     code VARCHAR(32) NOT NULL UNIQUE,
     server_id BIGINT NOT NULL,
     creator_id BIGINT NOT NULL,
+    target_channel_id BIGINT NULL,
     expires_at TIMESTAMP NULL,
     max_uses INT NULL,
     use_count INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (server_id) REFERENCES servers(id) ON DELETE CASCADE,
-    FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (creator_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (target_channel_id) REFERENCES channels(id) ON DELETE SET NULL
 );
 
 -- 创建附件表
@@ -181,6 +183,7 @@ CREATE INDEX idx_direct_conversations_user_two ON direct_conversations(user_two_
 CREATE INDEX idx_direct_messages_conversation ON direct_messages(conversation_id);
 CREATE INDEX idx_direct_messages_author ON direct_messages(author_id);
 CREATE INDEX idx_server_invites_code ON server_invites(code);
+CREATE INDEX idx_server_invites_target_channel ON server_invites(target_channel_id);
 CREATE INDEX idx_attachments_message_id ON attachments(message_id);
 CREATE INDEX idx_direct_attachments_message_id ON direct_attachments(direct_message_id);
 

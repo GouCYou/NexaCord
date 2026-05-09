@@ -12,8 +12,8 @@
         {{ statusCopy }}
       </p>
 
-      <button class="join-button" type="button" :disabled="isLoading || !invite" @click="joinServer">
-        {{ isLoading ? '处理中……' : '接受邀请' }}
+      <button class="join-button" type="button" :disabled="isLoading || !invite || isAlreadyMember" @click="joinServer">
+        {{ joinButtonLabel }}
       </button>
 
       <router-link class="back-link" to="/">返回 Nexacord</router-link>
@@ -26,18 +26,39 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Server as ServerIcon } from 'lucide-vue-next';
 import serverService from '../services/serverService';
+import { useChannelStore } from '../stores/channelStore';
 import { useServerStore } from '../stores/serverStore';
 import type { ServerInvite } from '../types';
 
 const route = useRoute();
 const router = useRouter();
 const serverStore = useServerStore();
+const channelStore = useChannelStore();
 
 const invite = ref<ServerInvite | null>(null);
 const isLoading = ref(false);
 const error = ref('');
 
 const inviteCode = computed(() => String(route.params.code || ''));
+const isAlreadyMember = computed(() => Boolean(invite.value?.member));
+const targetChannelLabel = computed(() => {
+  if (!invite.value?.channelId || !invite.value.channelName) {
+    return '';
+  }
+
+  return `${invite.value.channelType === 'VOICE' ? '语音频道' : '#'} ${invite.value.channelName}`;
+});
+const joinButtonLabel = computed(() => {
+  if (isLoading.value) {
+    return '处理中……';
+  }
+
+  if (isAlreadyMember.value) {
+    return invite.value?.channelId ? '已是该频道成员' : '已是服务器成员';
+  }
+
+  return '接受邀请';
+});
 const statusCopy = computed(() => {
   if (error.value) {
     return error.value;
@@ -45,6 +66,16 @@ const statusCopy = computed(() => {
 
   if (!invite.value) {
     return '正在确认这条邀请链接是否仍然有效。';
+  }
+
+  if (isAlreadyMember.value) {
+    return invite.value.channelId
+      ? `你已经是 ${invite.value.serverName} 中 ${targetChannelLabel.value} 的成员。`
+      : `你已经是 ${invite.value.serverName} 的服务器成员。`;
+  }
+
+  if (targetChannelLabel.value) {
+    return `你将加入 ${invite.value.serverName}，并进入 ${targetChannelLabel.value}。`;
   }
 
   return `你将加入 ${invite.value.serverName}，和服务器成员一起聊天、语音和分享文件。`;
@@ -67,7 +98,7 @@ const loadInvite = async () => {
 };
 
 const joinServer = async () => {
-  if (!invite.value) {
+  if (!invite.value || isAlreadyMember.value) {
     return;
   }
 
@@ -78,7 +109,14 @@ const joinServer = async () => {
     const server = await serverService.joinInvite(invite.value.code);
     await serverStore.fetchServers(server.id);
     serverStore.setCurrentServer(server.id);
-    router.push('/');
+    if (invite.value.channelId) {
+      await channelStore.fetchChannels(server.id, invite.value.channelId);
+      channelStore.setCurrentChannel(invite.value.channelId);
+      router.push(`/servers/${server.id}/channels/${invite.value.channelId}`);
+      return;
+    }
+
+    router.push(`/servers/${server.id}`);
   } catch (err: any) {
     error.value =
       err.response?.data?.error ||

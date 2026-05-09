@@ -6,10 +6,12 @@ import cn.cctstudio.nexacord.dto.ServerInviteResponse;
 import cn.cctstudio.nexacord.exception.AccessDeniedException;
 import cn.cctstudio.nexacord.exception.BadRequestException;
 import cn.cctstudio.nexacord.exception.ResourceNotFoundException;
+import cn.cctstudio.nexacord.model.Channel;
 import cn.cctstudio.nexacord.model.Member;
 import cn.cctstudio.nexacord.model.Server;
 import cn.cctstudio.nexacord.model.ServerInvite;
 import cn.cctstudio.nexacord.model.User;
+import cn.cctstudio.nexacord.repository.ChannelRepository;
 import cn.cctstudio.nexacord.repository.MemberRepository;
 import cn.cctstudio.nexacord.repository.ServerInviteRepository;
 import cn.cctstudio.nexacord.repository.UserRepository;
@@ -37,6 +39,7 @@ public class ServerController {
     private final MemberRepository memberRepository;
     private final UserRepository userRepository;
     private final ServerInviteRepository serverInviteRepository;
+    private final ChannelRepository channelRepository;
     private final SimpMessagingTemplate messagingTemplate;
 
     @PostMapping
@@ -189,15 +192,18 @@ public class ServerController {
     @PostMapping("/{id}/invites")
     public ResponseEntity<ServerInviteResponse> createServerInvite(
             @PathVariable Long id,
+            @RequestParam(required = false) Long channelId,
             @AuthenticationPrincipal User currentUser
     ) {
         requireMember(id, currentUser);
 
         Server server = serverService.getServerById(id);
+        Channel targetChannel = resolveInviteTargetChannel(id, channelId);
         ServerInvite invite = ServerInvite.builder()
                 .code(generateInviteCode())
                 .server(server)
                 .creator(currentUser)
+                .targetChannel(targetChannel)
                 .expiresAt(Instant.now().plus(7, ChronoUnit.DAYS))
                 .maxUses(null)
                 .useCount(0)
@@ -207,6 +213,25 @@ public class ServerController {
                 ServerInviteResponse.from(serverInviteRepository.save(invite)),
                 HttpStatus.CREATED
         );
+    }
+
+    private Channel resolveInviteTargetChannel(Long serverId, Long channelId) {
+        if (channelId == null) {
+            return null;
+        }
+
+        Channel channel = channelRepository.findById(channelId)
+                .orElseThrow(() -> new ResourceNotFoundException("没有找到这个频道。"));
+
+        if (channel.getServer() == null || !serverId.equals(channel.getServer().getId())) {
+            throw new BadRequestException("邀请目标频道不属于当前服务器。");
+        }
+
+        if (channel.getType() == Channel.ChannelType.CATEGORY) {
+            throw new BadRequestException("不能邀请到分类频道。");
+        }
+
+        return channel;
     }
 
     private void requireMember(Long serverId, User currentUser) {
