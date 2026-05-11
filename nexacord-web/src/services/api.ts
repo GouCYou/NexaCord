@@ -31,7 +31,7 @@ class ApiService {
 
     this.axiosInstance.interceptors.request.use((config) => {
       const token = readAuthValue('token');
-      if (token) {
+      if (token && !this.isPublicAuthEndpoint(config.url)) {
         config.headers.Authorization = `Bearer ${token}`;
       }
       return config;
@@ -49,7 +49,7 @@ class ApiService {
         }
 
         const canRefresh =
-          status === 401 &&
+          this.isRefreshableAuthError(error) &&
           originalConfig &&
           !originalConfig._retry &&
           !String(originalConfig.url || '').includes('/auth/refresh') &&
@@ -120,6 +120,37 @@ class ApiService {
         'Content-Type': 'multipart/form-data',
       },
     }) as Promise<T>;
+  }
+
+  private isRefreshableAuthError(error: unknown): boolean {
+    const response = (error as any)?.response;
+    const status = response?.status;
+    if (status === 401) {
+      return true;
+    }
+
+    if (status !== 403) {
+      return false;
+    }
+
+    const reason = this.getHeader(response.headers, 'x-nexacord-auth-reason') || response.data?.reason;
+    if (reason === 'TOKEN_INVALID_OR_EXPIRED') {
+      return true;
+    }
+
+    return this.hasEmptyResponseBody(response.data);
+  }
+
+  private hasEmptyResponseBody(data: unknown): boolean {
+    if (data == null || data === '') {
+      return true;
+    }
+
+    return typeof data === 'object' && !Array.isArray(data) && Object.keys(data as Record<string, unknown>).length === 0;
+  }
+
+  private isPublicAuthEndpoint(url?: string): boolean {
+    return String(url || '').includes('/auth/');
   }
 
   private async refreshAccessToken(): Promise<string | null> {

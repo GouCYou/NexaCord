@@ -26,26 +26,37 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+        String jwt = getJwtFromRequest(request);
         try {
-            String jwt = getJwtFromRequest(request);
+            if (StringUtils.hasText(jwt)) {
+                if (!jwtTokenProvider.validateToken(jwt)) {
+                    if (!isAuthenticationOptionalRequest(request)) {
+                        writeInvalidTokenResponse(response);
+                        return;
+                    }
+                } else {
+                    String username = jwtTokenProvider.getUsernameFromToken(jwt);
+                    String sessionId = jwtTokenProvider.getSessionIdFromToken(jwt);
 
-            if (StringUtils.hasText(jwt) && jwtTokenProvider.validateToken(jwt)) {
-                String username = jwtTokenProvider.getUsernameFromToken(jwt);
-                String sessionId = jwtTokenProvider.getSessionIdFromToken(jwt);
+                    UserDetails userDetails = customUserDetailsService.loadUserByUsername(username);
+                    if (userDetails instanceof cn.cctstudio.nexacord.model.User user && !isCurrentSession(user, sessionId)) {
+                        writeSessionReplacedResponse(response, user.getActiveDeviceName());
+                        return;
+                    }
 
-                UserDetails userDetails = customUserDetailsService.loadUserByUsername(username);
-                if (userDetails instanceof cn.cctstudio.nexacord.model.User user && !isCurrentSession(user, sessionId)) {
-                    writeSessionReplacedResponse(response, user.getActiveDeviceName());
-                    return;
+                    UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+                    authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
                 }
-
-                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
-                SecurityContextHolder.getContext().setAuthentication(authentication);
             }
         } catch (Exception ex) {
             logger.error("Could not set user authentication in security context", ex);
+            SecurityContextHolder.clearContext();
+            if (StringUtils.hasText(jwt) && !isAuthenticationOptionalRequest(request) && !response.isCommitted()) {
+                writeInvalidTokenResponse(response);
+                return;
+            }
         }
 
         filterChain.doFilter(request, response);
@@ -65,6 +76,39 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         response.getWriter().write("""
                 {"error":"你的账号已在其他设备登录。","reason":"SESSION_REPLACED","deviceName":"%s"}
                 """.formatted(escapeJson(normalizedDeviceName)).trim());
+    }
+
+    private void writeInvalidTokenResponse(HttpServletResponse response) throws IOException {
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.setContentType("application/json;charset=UTF-8");
+        response.setHeader("X-Nexacord-Auth-Reason", "TOKEN_INVALID_OR_EXPIRED");
+        response.getWriter().write("""
+                {"error":"登录状态已过期，请刷新后重试。","reason":"TOKEN_INVALID_OR_EXPIRED"}
+                """.trim());
+    }
+
+    private boolean isAuthenticationOptionalRequest(HttpServletRequest request) {
+        String method = request.getMethod();
+        if ("OPTIONS".equalsIgnoreCase(method)) {
+            return true;
+        }
+
+        String path = getRequestPath(request);
+        return path.startsWith("/api/auth/")
+                || path.startsWith("/api/public/")
+                || path.startsWith("/swagger-ui/")
+                || path.startsWith("/v3/api-docs/")
+                || path.startsWith("/ws/");
+    }
+
+    private String getRequestPath(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        String contextPath = request.getContextPath();
+        if (StringUtils.hasText(contextPath) && path.startsWith(contextPath)) {
+            return path.substring(contextPath.length());
+        }
+        return path;
     }
 
     private String escapeJson(String value) {
