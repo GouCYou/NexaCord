@@ -41,7 +41,6 @@
             />
           </label>
           <p v-if="usernameError" class="error-inline">{{ usernameError }}</p>
-          <p v-else class="hint-inline">用户名只能包含英文字母、数字和下划线。</p>
 
           <label class="field">
             <span>昵称</span>
