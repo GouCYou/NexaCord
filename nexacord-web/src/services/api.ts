@@ -4,7 +4,7 @@ import type { User } from '../types';
 import { clearAuthSession, isRememberedSession, persistAuthSession, readAuthValue } from '../utils/authStorage';
 import { getDeviceName } from '../utils/deviceInfo';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://weiladream.cn:18080/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api-nexacord.cctstudio.cn/api';
 
 type AuthResponse = {
   accessToken: string;
