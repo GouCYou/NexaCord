@@ -1,6 +1,10 @@
 <template>
   <section class="friends-home">
     <header class="friends-topbar">
+      <button class="mobile-nav-button" type="button" aria-label="打开导航" @click="openMobileNav">
+        <Menu :size="22" aria-hidden="true" />
+      </button>
+
       <div class="topbar-title">
         <Users :size="22" aria-hidden="true" />
         <h1>好友</h1>
@@ -158,6 +162,7 @@ import { useRouter } from 'vue-router';
 import {
   Check,
   Gamepad2,
+  Menu,
   MessageCircle,
   RefreshCw,
   Search,
@@ -317,6 +322,10 @@ const focusFriendTab = (event: Event) => {
   }
 };
 
+const openMobileNav = () => {
+  window.dispatchEvent(new CustomEvent('nexacord:open-mobile-nav'));
+};
+
 const applyUserStatusUpdate = (payload: unknown) => {
   const author = (payload as { author?: Pick<User, 'id' | 'status'> })?.author;
   if (!author?.id || !author.status) {
@@ -387,6 +396,10 @@ onBeforeUnmount(() => {
   padding: 0 18px;
   border-bottom: 1px solid var(--discord-border);
   background: var(--discord-bg);
+}
+
+.mobile-nav-button {
+  display: none;
 }
 
 .topbar-title {
@@ -770,6 +783,88 @@ button:disabled {
   .request-columns,
   .add-friend-row {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .friends-home {
+    height: 100dvh;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .friends-topbar {
+    min-height: calc(54px + env(safe-area-inset-top));
+    align-items: center;
+    flex-direction: row;
+    gap: 8px;
+    padding: calc(8px + env(safe-area-inset-top)) 8px 8px;
+    overflow: hidden;
+  }
+
+  .mobile-nav-button {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    flex: 0 0 38px;
+    display: grid;
+    place-items: center;
+    background: var(--discord-muted-surface);
+    color: var(--discord-text);
+  }
+
+  .topbar-title {
+    min-width: 0;
+    flex: 0 0 auto;
+    gap: 8px;
+    padding-right: 8px;
+    border-right: 1px solid var(--discord-border);
+  }
+
+  .topbar-title h1 {
+    font-size: 16px;
+  }
+
+  .friend-tabs {
+    min-width: 0;
+    flex: 1;
+    flex-wrap: nowrap;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .friend-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .friend-tabs button {
+    flex: 0 0 auto;
+    min-height: 34px;
+    padding: 0 10px;
+    white-space: nowrap;
+  }
+
+  .friends-content {
+    min-height: 0;
+  }
+
+  .friends-main {
+    padding: 14px 12px calc(18px + env(safe-area-inset-bottom));
+  }
+
+  .friend-row {
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 8px 6px;
+  }
+
+  .row-actions {
+    gap: 6px;
+  }
+
+  .circle-action {
+    width: 34px;
+    height: 34px;
   }
 }
 </style>

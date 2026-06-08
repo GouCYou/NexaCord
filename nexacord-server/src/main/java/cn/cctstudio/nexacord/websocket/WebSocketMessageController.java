@@ -1,11 +1,20 @@
 package cn.cctstudio.nexacord.websocket;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import cn.cctstudio.nexacord.dto.DirectConversationResponse;
+import cn.cctstudio.nexacord.dto.DirectMessageResponse;
+import cn.cctstudio.nexacord.dto.DirectRealtimeEvent;
 import cn.cctstudio.nexacord.dto.websocket.DirectCallSignalMessage;
 import cn.cctstudio.nexacord.dto.websocket.VoiceSignalMessage;
 import cn.cctstudio.nexacord.dto.websocket.VoiceStateMessage;
 import cn.cctstudio.nexacord.dto.websocket.WebSocketMessage;
+import cn.cctstudio.nexacord.model.DirectConversation;
+import cn.cctstudio.nexacord.model.DirectMessage;
 import cn.cctstudio.nexacord.model.Friendship;
 import cn.cctstudio.nexacord.model.User;
+import cn.cctstudio.nexacord.repository.DirectConversationRepository;
+import cn.cctstudio.nexacord.repository.DirectMessageRepository;
 import cn.cctstudio.nexacord.repository.FriendshipRepository;
 import cn.cctstudio.nexacord.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,8 +29,11 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.socket.messaging.SessionConnectEvent;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.security.Principal;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -39,8 +51,18 @@ public class WebSocketMessageController {
     @Autowired
     private FriendshipRepository friendshipRepository;
 
+    @Autowired
+    private DirectConversationRepository directConversationRepository;
+
+    @Autowired
+    private DirectMessageRepository directMessageRepository;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
     private final Map<Long, Map<Long, VoiceSignalMessage.UserInfo>> voiceParticipants = new ConcurrentHashMap<>();
     private final Map<Long, Set<Long>> authorizedDirectVoiceParticipants = new ConcurrentHashMap<>();
+    private final Map<Long, DirectCallSession> directCallSessions = new ConcurrentHashMap<>();
     private final Map<String, Long> sessionUsers = new ConcurrentHashMap<>();
     private final Map<Long, Set<String>> userSessions = new ConcurrentHashMap<>();
 
@@ -210,6 +232,8 @@ public class WebSocketMessageController {
         }
 
         Long channelId = directRoomIdFor(callee.getId(), caller.getId());
+        DirectCallSession session = new DirectCallSession(caller.getId(), callee.getId(), Instant.now());
+        directCallSessions.put(channelId, session);
         authorizedDirectVoiceParticipants
                 .computeIfAbsent(channelId, ignored -> ConcurrentHashMap.newKeySet())
                 .addAll(Set.of(callee.getId(), caller.getId()));
@@ -220,6 +244,7 @@ public class WebSocketMessageController {
                 caller,
                 callee
         );
+        message.setStartedAt(session.startedAt());
         messagingTemplate.convertAndSend("/topic/direct-call/user/" + caller.getId(), message);
         messagingTemplate.convertAndSend("/topic/direct-call/user/" + callee.getId(), message);
     }
@@ -350,14 +375,115 @@ public class WebSocketMessageController {
             return;
         }
 
+        if (sender.getId().equals(target.getId()) || !areAcceptedFriends(sender.getId(), target.getId())) {
+            return;
+        }
+
         Long channelId = directRoomIdFor(sender.getId(), target.getId());
+        DirectCallSession session = directCallSessions.remove(channelId);
+        long durationSeconds = session == null
+                ? 0L
+                : Math.max(0L, Duration.between(session.startedAt(), Instant.now()).getSeconds());
+
         if (type == DirectCallSignalMessage.DirectCallType.DIRECT_CALL_END) {
             authorizedDirectVoiceParticipants.remove(channelId);
         }
 
         DirectCallSignalMessage message = buildDirectCallMessage(channelId, type, sender, target);
+        if (session != null) {
+            message.setStartedAt(session.startedAt());
+        }
+        message.setDurationSeconds(durationSeconds);
+        if (type != DirectCallSignalMessage.DirectCallType.DIRECT_CALL_END || session != null) {
+            recordDirectCallMessage(sender, target, type, session, durationSeconds);
+        }
         messagingTemplate.convertAndSend("/topic/direct-call/user/" + target.getId(), message);
         messagingTemplate.convertAndSend("/topic/direct-call/user/" + sender.getId(), message);
+    }
+
+    private void recordDirectCallMessage(
+            User sender,
+            User target,
+            DirectCallSignalMessage.DirectCallType type,
+            DirectCallSession session,
+            long durationSeconds
+    ) {
+        DirectConversation conversation = directConversationRepository
+                .findBetweenUsers(sender.getId(), target.getId())
+                .orElseGet(() -> directConversationRepository.save(buildDirectConversation(sender, target)));
+        DirectMessage message = DirectMessage.builder()
+                .conversation(conversation)
+                .author(sender)
+                .content(buildDirectCallRecordContent(sender, target, type, session, durationSeconds))
+                .edited(Boolean.FALSE)
+                .deleted(Boolean.FALSE)
+                .build();
+        DirectMessage savedMessage = directMessageRepository.save(message);
+        conversation.setUpdatedAt(Instant.now());
+        directConversationRepository.save(conversation);
+        publishDirectConversationEvent(conversation, savedMessage);
+    }
+
+    private String buildDirectCallRecordContent(
+            User sender,
+            User target,
+            DirectCallSignalMessage.DirectCallType type,
+            DirectCallSession session,
+            long durationSeconds
+    ) {
+        String status = switch (type) {
+            case DIRECT_CALL_DECLINE -> "declined";
+            case DIRECT_CALL_CANCEL -> "cancelled";
+            default -> "ended";
+        };
+        Long callerId = session == null
+                ? type == DirectCallSignalMessage.DirectCallType.DIRECT_CALL_DECLINE ? target.getId() : sender.getId()
+                : session.callerId();
+        Long calleeId = session == null
+                ? type == DirectCallSignalMessage.DirectCallType.DIRECT_CALL_DECLINE ? sender.getId() : target.getId()
+                : session.calleeId();
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("type", "direct_call");
+        payload.put("status", status);
+        payload.put("durationSeconds", durationSeconds);
+        payload.put("callerId", callerId);
+        payload.put("calleeId", calleeId);
+        payload.put("startedAt", session == null ? null : session.startedAt().toString());
+        payload.put("endedAt", Instant.now().toString());
+
+        try {
+            return "nexacord:call:" + objectMapper.writeValueAsString(payload);
+        } catch (JsonProcessingException ignored) {
+            return "nexacord:call:{\"type\":\"direct_call\",\"status\":\"" + status + "\",\"durationSeconds\":" + durationSeconds + "}";
+        }
+    }
+
+    private DirectConversation buildDirectConversation(User currentUser, User targetUser) {
+        boolean currentUserFirst = currentUser.getId() < targetUser.getId();
+        return DirectConversation.builder()
+                .userOne(currentUserFirst ? currentUser : targetUser)
+                .userTwo(currentUserFirst ? targetUser : currentUser)
+                .build();
+    }
+
+    private void publishDirectConversationEvent(DirectConversation conversation, DirectMessage message) {
+        publishDirectConversationEventForUser(conversation, conversation.getUserOne(), message);
+        publishDirectConversationEventForUser(conversation, conversation.getUserTwo(), message);
+    }
+
+    private void publishDirectConversationEventForUser(
+            DirectConversation conversation,
+            User user,
+            DirectMessage message
+    ) {
+        messagingTemplate.convertAndSend(
+                "/topic/direct/user/" + user.getId(),
+                DirectRealtimeEvent.builder()
+                        .type("MESSAGE_CREATED")
+                        .conversation(DirectConversationResponse.from(conversation, user, message))
+                        .message(DirectMessageResponse.from(message))
+                        .build()
+        );
     }
 
     private DirectCallSignalMessage buildDirectCallMessage(
@@ -492,5 +618,8 @@ public class WebSocketMessageController {
         userInfo.setAvatarUrl(user.getAvatarUrl());
         userInfo.setStatus(user.getStatus());
         return userInfo;
+    }
+
+    private record DirectCallSession(Long callerId, Long calleeId, Instant startedAt) {
     }
 }

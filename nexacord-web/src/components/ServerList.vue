@@ -128,6 +128,7 @@ const openHome = () => {
   serverStore.setCurrentServer(null);
   channelStore.clearChannels();
   router.push('/');
+  window.dispatchEvent(new CustomEvent('nexacord:close-mobile-nav'));
 };
 
 const selectServer = async (serverId: number) => {
@@ -148,10 +149,12 @@ const selectServer = async (serverId: number) => {
 
   if (nextChannel) {
     router.push(`/servers/${serverId}/channels/${nextChannel.id}`);
+    window.dispatchEvent(new CustomEvent('nexacord:close-mobile-nav'));
     return;
   }
 
   router.push(`/servers/${serverId}`);
+  window.dispatchEvent(new CustomEvent('nexacord:close-mobile-nav'));
 };
 
 const closeModal = () => {
@@ -188,6 +191,7 @@ const createServer = async () => {
       } else {
         router.push(`/servers/${serverStore.currentServerId}`);
       }
+      window.dispatchEvent(new CustomEvent('nexacord:close-mobile-nav'));
     }
 
     closeModal();
@@ -485,5 +489,29 @@ onBeforeUnmount(() => {
 .secondary-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+@media (max-width: 760px) {
+  .server-list {
+    padding: calc(12px + env(safe-area-inset-top)) 0 calc(18px + env(safe-area-inset-bottom));
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .server-tooltip {
+    display: none;
+  }
+
+  .modal-overlay {
+    z-index: 120;
+    padding: 12px;
+  }
+
+  .modal-card {
+    width: 100%;
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+    border-radius: 12px;
+  }
 }
 </style>

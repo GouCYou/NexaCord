@@ -1,5 +1,13 @@
 <template>
-  <div class="layout">
+  <div class="layout" :class="{ 'mobile-nav-open': mobileNavOpen }">
+    <button
+      v-if="mobileNavOpen"
+      class="mobile-nav-backdrop"
+      type="button"
+      aria-label="关闭导航"
+      @click="closeMobileNav"
+    ></button>
+
     <aside class="servers-pane">
       <ServerList />
     </aside>
@@ -11,6 +19,9 @@
 
     <main class="content-pane">
       <div v-if="showLandingState" class="empty-state">
+        <button class="mobile-empty-nav-button" type="button" aria-label="打开导航" @click="openMobileNav">
+          <Menu :size="22" aria-hidden="true" />
+        </button>
         <span class="empty-state-kicker">Nexacord</span>
         <h1>创建你的第一个服务器</h1>
         <p>
@@ -24,6 +35,9 @@
       </div>
 
       <div v-else-if="showServerSetupState" class="empty-state server-empty-state">
+        <button class="mobile-empty-nav-button" type="button" aria-label="打开导航" @click="openMobileNav">
+          <Menu :size="22" aria-hidden="true" />
+        </button>
         <span class="empty-state-kicker">{{ currentServer?.name }}</span>
         <h1>这个服务器已经准备好创建第一个频道</h1>
         <p>
@@ -95,6 +109,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useRoute, useRouter } from 'vue-router';
+import { Menu } from 'lucide-vue-next';
 import ServerList from '../components/ServerList.vue';
 import ChannelList from '../components/ChannelList.vue';
 import FriendsSidebar from '../components/FriendsSidebar.vue';
@@ -131,6 +146,7 @@ const { currentUser, isAuthenticated } = storeToRefs(userStore);
 const { incomingCall, outgoingCall, isJoined } = storeToRefs(voiceStore);
 const showMemberSidebar = ref(true);
 const showCallReplaceConfirm = ref(false);
+const mobileNavOpen = ref(false);
 const defaultAvatarUrl = '/logo.png';
 let routeSyncVersion = 0;
 
@@ -170,6 +186,24 @@ const dispatchCreateChannel = () => {
 
 const toggleMemberSidebar = () => {
   showMemberSidebar.value = !showMemberSidebar.value;
+};
+
+const openMobileNav = () => {
+  mobileNavOpen.value = true;
+};
+
+const closeMobileNav = () => {
+  mobileNavOpen.value = false;
+};
+
+const toggleMobileNav = () => {
+  mobileNavOpen.value = !mobileNavOpen.value;
+};
+
+const handleKeydown = (event: KeyboardEvent) => {
+  if (event.key === 'Escape') {
+    closeMobileNav();
+  }
 };
 
 const handleAcceptIncomingCall = () => {
@@ -306,6 +340,10 @@ const handleChannelRealtimeUpdate = (_event: unknown, payload: unknown) => {
 
 onMounted(() => {
   window.addEventListener('nexacord:toggle-member-sidebar', toggleMemberSidebar);
+  window.addEventListener('nexacord:open-mobile-nav', openMobileNav);
+  window.addEventListener('nexacord:close-mobile-nav', closeMobileNav);
+  window.addEventListener('nexacord:toggle-mobile-nav', toggleMobileNav);
+  window.addEventListener('keydown', handleKeydown);
   websocketService.on('server:update', handleServerRealtimeUpdate);
   websocketService.on('channel:update', handleChannelRealtimeUpdate);
   void bootstrapWorkspace();
@@ -313,6 +351,10 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('nexacord:toggle-member-sidebar', toggleMemberSidebar);
+  window.removeEventListener('nexacord:open-mobile-nav', openMobileNav);
+  window.removeEventListener('nexacord:close-mobile-nav', closeMobileNav);
+  window.removeEventListener('nexacord:toggle-mobile-nav', toggleMobileNav);
+  window.removeEventListener('keydown', handleKeydown);
   websocketService.off('server:update', handleServerRealtimeUpdate);
   websocketService.off('channel:update', handleChannelRealtimeUpdate);
 });
@@ -320,6 +362,7 @@ onBeforeUnmount(() => {
 watch(
   () => [route.name, route.params.serverId, route.params.channelId],
   () => {
+    closeMobileNav();
     void syncRouteState();
   }
 );
@@ -348,6 +391,14 @@ watch(incomingCall, () => {
   width: 100%;
   height: 100vh;
   background: var(--discord-bg);
+}
+
+.mobile-nav-backdrop {
+  display: none;
+}
+
+.mobile-empty-nav-button {
+  display: none;
 }
 
 .servers-pane {
@@ -611,7 +662,99 @@ watch(incomingCall, () => {
 
 @media (max-width: 760px) {
   .layout {
-    grid-template-columns: 64px 200px 1fr;
+    position: relative;
+    grid-template-columns: minmax(0, 1fr);
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow: hidden;
+  }
+
+  .mobile-nav-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    display: block;
+    background: rgba(0, 0, 0, 0.48);
+    backdrop-filter: blur(2px);
+  }
+
+  .servers-pane,
+  .channels-pane {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    z-index: 80;
+    height: 100dvh;
+    box-shadow: 18px 0 44px rgba(0, 0, 0, 0.28);
+    transition: transform 180ms ease;
+  }
+
+  .servers-pane {
+    left: 0;
+    width: 72px;
+    transform: translateX(-72px);
+  }
+
+  .channels-pane {
+    left: 72px;
+    width: min(292px, calc(100vw - 72px));
+    transform: translateX(calc(-100% - 72px));
+  }
+
+  .layout.mobile-nav-open .servers-pane,
+  .layout.mobile-nav-open .channels-pane {
+    transform: translateX(0);
+  }
+
+  .content-pane {
+    grid-column: 1;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .channel-workspace,
+  .channel-workspace.with-members {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .channel-workspace :deep(.member-sidebar) {
+    display: none;
+  }
+
+  .empty-state {
+    position: relative;
+    padding: 26px;
+  }
+
+  .mobile-empty-nav-button {
+    position: absolute;
+    top: calc(14px + env(safe-area-inset-top));
+    left: 14px;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    background: var(--discord-muted-surface);
+    color: var(--discord-text);
+  }
+
+  .empty-state h1 {
+    font-size: 30px;
+  }
+
+  .call-toast {
+    right: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    left: 10px;
+    min-width: 0;
+  }
+
+  .incoming-call-card,
+  .call-confirm-card {
+    width: calc(100vw - 24px);
   }
 }
 </style>

@@ -302,6 +302,7 @@ const closeServerMenu = () => {
 const openInviteModal = () => {
   showServerMenu.value = false;
   window.dispatchEvent(new CustomEvent('nexacord:open-invite'));
+  window.dispatchEvent(new CustomEvent('nexacord:close-mobile-nav'));
 };
 
 const openChannelInvite = (channelId: number) => {
@@ -309,6 +310,7 @@ const openChannelInvite = (channelId: number) => {
   window.dispatchEvent(new CustomEvent('nexacord:open-invite', {
     detail: { channelId },
   }));
+  window.dispatchEvent(new CustomEvent('nexacord:close-mobile-nav'));
 };
 
 const joinVoiceChannel = (channel: Channel) => {
@@ -365,6 +367,7 @@ const handleChannelDeleted = () => {
 const openServerSettings = () => {
   showServerMenu.value = false;
   window.dispatchEvent(new CustomEvent('nexacord:open-server-settings', { detail: { tab: 'overview' } }));
+  window.dispatchEvent(new CustomEvent('nexacord:close-mobile-nav'));
 };
 
 const toggleCategory = (category: 'TEXT' | 'VOICE') => {
@@ -379,6 +382,7 @@ const selectChannel = (channelId: number) => {
   channelStore.setCurrentChannel(channelId);
   markChannelRead(channelId);
   router.push(`/servers/${currentServerId.value}/channels/${channelId}`);
+  window.dispatchEvent(new CustomEvent('nexacord:close-mobile-nav'));
 };
 
 const closeModal = () => {
@@ -406,6 +410,7 @@ const createChannel = async () => {
   if (success && channelStore.currentChannelId) {
     closeModal();
     router.push(`/servers/${currentServerId.value}/channels/${channelStore.currentChannelId}`);
+    window.dispatchEvent(new CustomEvent('nexacord:close-mobile-nav'));
   }
 };
 
@@ -986,6 +991,48 @@ onBeforeUnmount(() => {
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 760px) {
+  .channel-list {
+    height: 100dvh;
+  }
+
+  .channel-header {
+    min-height: calc(58px + env(safe-area-inset-top));
+    padding: calc(14px + env(safe-area-inset-top)) 12px 12px;
+  }
+
+  .channel-scroll {
+    padding: 10px 8px 14px;
+  }
+
+  .channel-item {
+    min-height: 42px;
+    padding-right: 70px;
+  }
+
+  .channel-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .server-menu {
+    left: 8px;
+    right: 8px;
+  }
+
+  .modal-overlay {
+    z-index: 120;
+    padding: 12px;
+  }
+
+  .modal-card {
+    width: 100%;
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+    border-radius: 12px;
   }
 }
 </style>

@@ -1,6 +1,10 @@
 <template>
   <section class="message-layout">
     <header class="message-header">
+      <button class="mobile-nav-button" type="button" aria-label="打开导航" @click="openMobileNav">
+        <Menu :size="22" aria-hidden="true" />
+      </button>
+
       <div class="message-header-meta">
         <span class="message-header-prefix">
           <Volume2 v-if="currentChannel?.type === 'VOICE'" :size="24" aria-hidden="true" />
@@ -230,7 +234,7 @@ import { useRoute } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import dayjs from 'dayjs';
 import 'dayjs/locale/zh-cn';
-import { FileIcon, Hash, Paperclip, Pencil, Send, Smile, Trash2, Users, Volume2, X } from 'lucide-vue-next';
+import { FileIcon, Hash, Menu, Paperclip, Pencil, Send, Smile, Trash2, Users, Volume2, X } from 'lucide-vue-next';
 import ImageAttachment from './ImageAttachment.vue';
 import ImagePreviewModal from './ImagePreviewModal.vue';
 import VoiceChannelPanel from './VoiceChannelPanel.vue';
@@ -342,6 +346,10 @@ const openUserPopover = (user: User, event: MouseEvent) => {
 
 const toggleMemberSidebar = () => {
   window.dispatchEvent(new CustomEvent('nexacord:toggle-member-sidebar'));
+};
+
+const openMobileNav = () => {
+  window.dispatchEvent(new CustomEvent('nexacord:open-mobile-nav'));
 };
 
 const filteredEmojiGroups = computed(() => {
@@ -765,6 +773,10 @@ onBeforeUnmount(() => {
 .header-tool:hover {
   background: var(--discord-hover);
   color: var(--discord-text);
+}
+
+.mobile-nav-button {
+  display: none;
 }
 
 .messages-scroll {
@@ -1306,6 +1318,149 @@ onBeforeUnmount(() => {
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 760px) {
+  .message-layout {
+    height: 100dvh;
+  }
+
+  .message-header {
+    min-height: calc(54px + env(safe-area-inset-top));
+    gap: 8px;
+    padding: calc(8px + env(safe-area-inset-top)) 8px 8px;
+  }
+
+  .mobile-nav-button {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    flex: 0 0 38px;
+    display: grid;
+    place-items: center;
+    background: var(--discord-muted-surface);
+    color: var(--discord-text);
+  }
+
+  .message-header-prefix {
+    display: none;
+  }
+
+  .message-header-meta {
+    gap: 8px;
+  }
+
+  .message-header-copy h2 {
+    font-size: 16px;
+  }
+
+  .message-header-copy p,
+  .message-header-status span {
+    display: none;
+  }
+
+  .header-tool {
+    width: 38px;
+    height: 38px;
+  }
+
+  .messages-scroll {
+    padding: 8px 0 12px;
+  }
+
+  .messages-scroll.is-empty-channel {
+    padding: 0 16px 28px;
+  }
+
+  .message-row {
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 9px;
+    padding: 7px 10px;
+  }
+
+  .message-row.own {
+    padding-right: 78px;
+  }
+
+  .avatar {
+    width: 34px;
+    height: 34px;
+  }
+
+  .message-actions {
+    top: 4px;
+    right: 8px;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .attachment {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .channel-welcome h1 {
+    font-size: 28px;
+  }
+
+  .channel-welcome p {
+    font-size: 15px;
+  }
+
+  .composer {
+    padding: 0 8px calc(8px + env(safe-area-inset-bottom));
+  }
+
+  .pending-file {
+    max-width: 100%;
+  }
+
+  .pending-file-copy {
+    min-width: 0;
+  }
+
+  .pending-file-copy strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .composer-input {
+    min-height: 52px;
+    gap: 6px;
+    padding: 8px;
+    border-radius: 18px;
+  }
+
+  .attach-button,
+  .emoji-button {
+    width: 34px;
+    height: 34px;
+  }
+
+  .send-button {
+    width: 38px;
+    height: 38px;
+    justify-content: center;
+    padding: 0;
+    border-radius: 50%;
+  }
+
+  .send-button span {
+    display: none;
+  }
+
+  .emoji-picker {
+    left: 8px;
+    right: 8px;
+    bottom: calc(100% + 8px);
+    width: auto;
+    max-height: min(360px, 54dvh);
+  }
+
+  .emoji-grid {
+    grid-template-columns: repeat(7, 1fr);
   }
 }
 </style>

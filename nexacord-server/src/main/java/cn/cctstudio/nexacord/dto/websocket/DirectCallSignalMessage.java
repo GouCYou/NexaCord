@@ -2,6 +2,8 @@ package cn.cctstudio.nexacord.dto.websocket;
 
 import lombok.Data;
 
+import java.time.Instant;
+
 @Data
 public class DirectCallSignalMessage {
     private Long channelId;
@@ -9,6 +11,8 @@ public class DirectCallSignalMessage {
     private UserInfo caller;
     private UserInfo callee;
     private String reason;
+    private Instant startedAt;
+    private Long durationSeconds;
 
     public enum DirectCallType {
         DIRECT_CALL_REQUEST,

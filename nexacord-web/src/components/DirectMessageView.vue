@@ -1,6 +1,10 @@
 <template>
   <section class="direct-layout">
     <header class="direct-header">
+      <button class="mobile-nav-button" type="button" aria-label="打开导航" @click="openMobileNav">
+        <Menu :size="22" aria-hidden="true" />
+      </button>
+
       <button
         v-if="currentConversation"
         class="direct-user"
@@ -81,6 +85,17 @@
               </div>
             </form>
 
+            <div v-else-if="callPayload(message.content)" class="direct-call-card">
+              <div class="call-record-icon">
+                <PhoneCall :size="22" aria-hidden="true" />
+              </div>
+              <div class="call-record-copy">
+                <span>{{ callRecordTitle(message) }}</span>
+                <strong>{{ callRecordSummary(message) }}</strong>
+                <small>{{ formatTime(message.createdAt) }}</small>
+              </div>
+            </div>
+
             <div v-else-if="invitePayload(message.content)" class="server-invite-card">
               <div class="invite-icon">
                 <img
@@ -129,7 +144,7 @@
               />
             </div>
           </div>
-          <div v-if="message.author.id === currentUser?.id && !invitePayload(message.content)" class="message-actions">
+          <div v-if="message.author.id === currentUser?.id && !invitePayload(message.content) && !callPayload(message.content)" class="message-actions">
             <button type="button" title="编辑消息" @click="startMessageEdit(message)">
               <Pencil :size="15" aria-hidden="true" />
             </button>
@@ -191,7 +206,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import dayjs from 'dayjs';
 import 'dayjs/locale/zh-cn';
-import { Check, Paperclip, Pencil, PhoneCall, Send, Server as ServerIcon, Trash2, X, XCircle } from 'lucide-vue-next';
+import { Check, Menu, Paperclip, Pencil, PhoneCall, Send, Server as ServerIcon, Trash2, X, XCircle } from 'lucide-vue-next';
 import ImageAttachment from './ImageAttachment.vue';
 import ImagePreviewModal from './ImagePreviewModal.vue';
 import fileService from '../services/fileService';
@@ -203,6 +218,7 @@ import { useServerStore } from '../stores/serverStore';
 import { useUserStore } from '../stores/userStore';
 import { useVoiceStore } from '../stores/voiceStore';
 import type { Attachment, DirectMessage, User } from '../types';
+import { formatCallDuration, parseDirectCallMessage } from '../utils/directCallMessage';
 import { parseDirectInviteMessage } from '../utils/inviteMessage';
 import { displayUserLabel } from '../utils/userDisplay';
 
@@ -282,6 +298,37 @@ const persistInviteStates = () => {
 };
 
 const invitePayload = (content: string) => parseDirectInviteMessage(content);
+const callPayload = (content: string) => parseDirectCallMessage(content);
+const callRecordTitle = (message: DirectMessage) => {
+  const call = callPayload(message.content);
+  if (call?.status === 'declined') {
+    return '已拒绝的语音通话';
+  }
+  if (call?.status === 'cancelled') {
+    return '已取消的语音通话';
+  }
+  return '语音通话';
+};
+const callRecordSummary = (message: DirectMessage) => {
+  const call = callPayload(message.content);
+  if (!call) {
+    return '';
+  }
+
+  if (call.status === 'declined') {
+    return message.author.id === currentUser.value?.id
+      ? '你拒绝了语音通话'
+      : `${displayUserName(message.author)} 拒绝了语音通话`;
+  }
+
+  if (call.status === 'cancelled') {
+    return message.author.id === currentUser.value?.id
+      ? '你取消了语音通话'
+      : `${displayUserName(message.author)} 取消了语音通话`;
+  }
+
+  return `通话时长 ${formatCallDuration(call.durationSeconds)}`;
+};
 const inviteStateKey = (message: DirectMessage) => `${message.id}:${invitePayload(message.content)?.code || ''}`;
 const inviteState = (message: DirectMessage) => inviteStates.value[inviteStateKey(message)];
 const isInviteAlreadyMember = (message: DirectMessage) => {
@@ -617,6 +664,10 @@ const startCall = () => {
   voiceStore.startDirectCall(currentConversation.value.otherUser);
 };
 
+const openMobileNav = () => {
+  window.dispatchEvent(new CustomEvent('nexacord:open-mobile-nav'));
+};
+
 watch(
   conversationId,
   async (nextConversationId) => {
@@ -773,6 +824,10 @@ onBeforeUnmount(() => {
   opacity: 0.55;
 }
 
+.mobile-nav-button {
+  display: none;
+}
+
 .direct-messages {
   min-height: 0;
   overflow-y: auto;
@@ -886,6 +941,50 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 10px;
+}
+
+.direct-call-card {
+  width: min(420px, 100%);
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid var(--discord-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--discord-surface) 90%, var(--discord-green));
+}
+
+.call-record-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--discord-green) 20%, var(--discord-surface-soft));
+  color: var(--discord-green);
+}
+
+.call-record-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.call-record-copy span,
+.call-record-copy small {
+  color: var(--discord-text-faint);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.call-record-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--discord-text);
+  font-size: 15px;
 }
 
 .server-invite-card {
@@ -1171,5 +1270,140 @@ onBeforeUnmount(() => {
   margin: 0;
   color: #ff8b8d;
   font-size: 13px;
+}
+
+@media (max-width: 760px) {
+  .direct-layout {
+    height: 100dvh;
+  }
+
+  .direct-header {
+    min-height: calc(54px + env(safe-area-inset-top));
+    gap: 8px;
+    padding: calc(8px + env(safe-area-inset-top)) 8px 8px;
+  }
+
+  .mobile-nav-button {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    flex: 0 0 38px;
+    display: grid;
+    place-items: center;
+    background: var(--discord-muted-surface);
+    color: var(--discord-text);
+  }
+
+  .direct-user {
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 9px;
+    padding-right: 4px;
+  }
+
+  .direct-avatar {
+    width: 36px;
+    height: 36px;
+  }
+
+  .header-action {
+    width: 38px;
+    height: 38px;
+  }
+
+  .direct-messages {
+    padding: 8px 0 12px;
+  }
+
+  .direct-welcome {
+    padding: 34px 14px 18px;
+  }
+
+  .direct-welcome h1 {
+    font-size: 26px;
+  }
+
+  .message-row {
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 9px;
+    padding: 7px 10px;
+  }
+
+  .message-row.own {
+    padding-right: 78px;
+  }
+
+  .message-avatar {
+    width: 34px;
+    height: 34px;
+  }
+
+  .message-actions {
+    top: 4px;
+    right: 8px;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .direct-call-card,
+  .server-invite-card {
+    width: 100%;
+  }
+
+  .server-invite-card {
+    grid-template-columns: 44px minmax(0, 1fr);
+    padding: 12px;
+  }
+
+  .invite-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+  }
+
+  .invite-actions {
+    grid-column: 1 / -1;
+  }
+
+  .direct-composer {
+    padding: 0 8px calc(8px + env(safe-area-inset-bottom));
+  }
+
+  .pending-file {
+    max-width: 100%;
+  }
+
+  .pending-file-copy {
+    min-width: 0;
+  }
+
+  .pending-file-copy strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .composer-input {
+    min-height: 52px;
+    gap: 6px;
+    padding: 8px;
+    border-radius: 18px;
+  }
+
+  .attach-button {
+    width: 34px;
+    height: 34px;
+  }
+
+  .composer-input > button:last-child {
+    width: 38px;
+    height: 38px;
+    justify-content: center;
+    padding: 0;
+    border-radius: 50%;
+  }
+
+  .composer-input > button:last-child span {
+    display: none;
+  }
 }
 </style>

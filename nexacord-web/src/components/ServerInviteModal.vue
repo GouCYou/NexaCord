@@ -495,4 +495,63 @@ onBeforeUnmount(() => {
     transform: translateY(0) scale(1);
   }
 }
+
+@media (max-width: 760px) {
+  .invite-overlay {
+    padding: 10px;
+  }
+
+  .invite-modal {
+    width: 100%;
+    max-height: calc(100dvh - 20px);
+    border-radius: 12px;
+  }
+
+  .invite-header {
+    padding: 16px 16px 12px;
+  }
+
+  .invite-search {
+    padding: 12px 16px;
+  }
+
+  .invite-search input {
+    height: 44px;
+    font-size: 15px;
+  }
+
+  .friend-scroll {
+    padding: 4px 12px 12px;
+  }
+
+  .friend-row {
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+
+  .friend-avatar {
+    width: 38px;
+    height: 38px;
+  }
+
+  .friend-copy strong {
+    font-size: 15px;
+  }
+
+  .invite-link-panel {
+    padding: 16px;
+  }
+
+  .invite-link-row {
+    grid-template-columns: 1fr;
+  }
+
+  .invite-link-row input {
+    font-size: 14px;
+  }
+
+  .copy-button {
+    min-height: 38px;
+  }
+}
 </style>

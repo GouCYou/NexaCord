@@ -230,3 +230,16 @@ select:focus-visible {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--discord-scrollbar-hover);
 }
+
+@media (max-width: 760px) {
+  html,
+  body,
+  #app {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    min-height: 100dvh;
+  }
+}

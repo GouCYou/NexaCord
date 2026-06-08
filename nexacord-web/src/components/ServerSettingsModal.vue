@@ -868,4 +868,85 @@ onBeforeUnmount(() => {
     padding-left: 24px;
   }
 }
+
+@media (max-width: 760px) {
+  .settings-overlay {
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-columns: 1fr;
+  }
+
+  .settings-sidebar {
+    min-width: 0;
+    padding: calc(12px + env(safe-area-inset-top)) 58px 10px 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--discord-border);
+  }
+
+  .server-card {
+    grid-template-columns: 44px minmax(0, 1fr);
+    padding: 6px;
+  }
+
+  .server-icon-preview {
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+  }
+
+  .settings-nav {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .settings-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .settings-nav span {
+    display: none;
+  }
+
+  .settings-nav button {
+    flex: 0 0 auto;
+    min-height: 34px;
+    white-space: nowrap;
+  }
+
+  .close-button {
+    top: calc(12px + env(safe-area-inset-top));
+    right: 10px;
+  }
+
+  .close-button span {
+    display: none;
+  }
+
+  .close-button svg {
+    width: 38px;
+    height: 38px;
+  }
+
+  .settings-content {
+    width: 100%;
+    gap: 22px;
+    padding: 22px 14px calc(72px + env(safe-area-inset-bottom));
+  }
+
+  .overview-grid,
+  .role-grid,
+  .member-row {
+    grid-template-columns: 1fr;
+  }
+
+  .member-row {
+    align-items: stretch;
+  }
+
+  .server-preview {
+    border-radius: 10px;
+  }
+}
 </style>

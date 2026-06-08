@@ -4,8 +4,8 @@
       <div class="voice-connection-status">
         <RadioTower :size="22" aria-hidden="true" />
         <span>
-          <strong>语音已连接</strong>
-          <small>{{ activeChannelName }}{{ activeServerName ? ` / ${activeServerName}` : '' }}</small>
+          <strong>{{ isDirectCall ? '私聊通话中' : '语音已连接' }}</strong>
+          <small>{{ voiceConnectionSubtitle }}</small>
         </span>
       </div>
 
@@ -121,6 +121,7 @@ import { useThemeStore } from '../stores/themeStore';
 import { useUserStore } from '../stores/userStore';
 import { useVoiceStore } from '../stores/voiceStore';
 import type { User } from '../types';
+import { formatCallTimer } from '../utils/directCallMessage';
 import { compactUserLabel } from '../utils/userDisplay';
 
 defineProps<{
@@ -136,7 +137,17 @@ const userStore = useUserStore();
 const voiceStore = useVoiceStore();
 const { currentUser } = storeToRefs(userStore);
 const { isLight } = storeToRefs(themeStore);
-const { activeChannelName, activeServerName, isJoined, isMuted, isDeafened, inputVolume, outputVolume } = storeToRefs(voiceStore);
+const {
+  activeChannelName,
+  activeServerName,
+  isJoined,
+  isMuted,
+  isDeafened,
+  inputVolume,
+  outputVolume,
+  activeCallElapsedSeconds,
+  isDirectCall,
+} = storeToRefs(voiceStore);
 const { leaveChannel, toggleMute, toggleDeafen, setInputVolume, setOutputVolume } = voiceStore;
 const showStatusMenu = ref(false);
 const showAccountMenu = ref(false);
@@ -163,6 +174,14 @@ const themeTitle = computed(() => (isLight.value ? '切换为深色模式' : '�
 const muteTitle = computed(() => (isMuted.value ? '打开麦克风' : '关闭麦克风'));
 const deafenTitle = computed(() => (isDeafened.value ? '恢复收听' : '拒听远端声音'));
 const displayName = computed(() => compactUserLabel(currentUser.value));
+const voiceConnectionSubtitle = computed(() => {
+  const base = `${activeChannelName.value}${activeServerName.value ? ` / ${activeServerName.value}` : ''}`;
+  if (!isDirectCall.value) {
+    return base;
+  }
+
+  return `${base} · ${formatCallTimer(activeCallElapsedSeconds.value)}`;
+});
 
 const toggleStatusMenu = () => {
   showStatusMenu.value = !showStatusMenu.value;
@@ -536,6 +555,37 @@ onBeforeUnmount(() => {
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 760px) {
+  .control-stack {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .voice-connection {
+    padding: 9px 8px;
+  }
+
+  .voice-connection-status {
+    grid-template-columns: 30px minmax(0, 1fr);
+  }
+
+  .voice-connection-status > svg {
+    width: 30px;
+    height: 30px;
+  }
+
+  .voice-connection-actions {
+    gap: 5px;
+  }
+
+  .voice-action {
+    min-height: 32px;
+  }
+
+  .user-control {
+    padding: 8px;
   }
 }
 </style>

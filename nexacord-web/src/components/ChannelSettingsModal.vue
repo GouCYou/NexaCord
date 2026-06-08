@@ -578,20 +578,36 @@ button:disabled {
 
 @media (max-width: 820px) {
   .settings-shell {
+    grid-template-rows: auto minmax(0, 1fr);
     grid-template-columns: 1fr;
   }
 
   .settings-nav {
-    display: none;
+    display: flex;
+    gap: 6px;
+    padding: calc(14px + env(safe-area-inset-top)) 12px 10px;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--discord-border);
   }
 
   .settings-content {
-    padding: 72px 22px 100px;
+    padding: 64px 18px calc(80px + env(safe-area-inset-bottom));
   }
 
   .settings-close {
-    top: 18px;
-    right: 18px;
+    top: calc(14px + env(safe-area-inset-top));
+    right: 12px;
+  }
+
+  .settings-close span,
+  .settings-nav strong {
+    display: none;
+  }
+
+  .settings-nav button {
+    flex: 0 0 auto;
+    min-height: 36px;
+    white-space: nowrap;
   }
 
   .permission-grid,

@@ -62,6 +62,7 @@ import { useUnreadStore } from '../stores/unreadStore';
 import { useUserStore } from '../stores/userStore';
 import { useVoiceStore } from '../stores/voiceStore';
 import type { DirectConversation, User } from '../types';
+import { formatCallDuration, parseDirectCallMessage } from '../utils/directCallMessage';
 import { parseDirectInviteMessage } from '../utils/inviteMessage';
 import { displayUserLabel } from '../utils/userDisplay';
 
@@ -83,6 +84,7 @@ const focusAddFriend = () => {
   if (route.name !== 'Friends') {
     router.push('/');
   }
+  window.dispatchEvent(new CustomEvent('nexacord:close-mobile-nav'));
   window.setTimeout(() => {
     window.dispatchEvent(new CustomEvent('nexacord:focus-friend-tab', { detail: { tab: 'add' } }));
   }, 30);
@@ -93,6 +95,7 @@ const focusPendingRequests = () => {
   if (route.name !== 'Friends') {
     router.push('/');
   }
+  window.dispatchEvent(new CustomEvent('nexacord:close-mobile-nav'));
   window.setTimeout(() => {
     window.dispatchEvent(new CustomEvent('nexacord:focus-friend-tab', { detail: { tab: 'pending' } }));
   }, 30);
@@ -103,6 +106,7 @@ const openFriends = () => {
   if (route.name !== 'Friends') {
     router.push('/');
   }
+  window.dispatchEvent(new CustomEvent('nexacord:close-mobile-nav'));
   window.setTimeout(() => {
     window.dispatchEvent(new CustomEvent('nexacord:focus-friend-tab', { detail: { tab: 'online' } }));
   }, 30);
@@ -145,6 +149,15 @@ const lastMessagePreview = (conversation: DirectConversation) => {
     return '[服务器邀请]';
   }
 
+  const call = parseDirectCallMessage(conversation.lastMessage.content);
+  if (call) {
+    if (call.status === 'ended') {
+      return `[语音通话] ${formatCallDuration(call.durationSeconds)}`;
+    }
+
+    return '[语音通话] 未接通';
+  }
+
   return conversation.lastMessage.content || '[图片]';
 };
 
@@ -152,6 +165,7 @@ const openConversation = (conversationId: number) => {
   activeHomeTarget.value = 'friends';
   markDirectRead(conversationId);
   router.push(`/direct/${conversationId}`);
+  window.dispatchEvent(new CustomEvent('nexacord:close-mobile-nav'));
 };
 
 const logout = () => {
@@ -438,5 +452,34 @@ onMounted(() => {
 .user-meta span {
   color: var(--discord-text-faint);
   font-size: 12px;
+}
+
+@media (max-width: 760px) {
+  .friends-sidebar {
+    height: 100dvh;
+  }
+
+  .friends-header {
+    min-height: calc(58px + env(safe-area-inset-top));
+    padding: calc(14px + env(safe-area-inset-top)) 12px 12px;
+  }
+
+  .dm-search,
+  .friends-nav {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .dm-list {
+    padding: 10px 10px 14px;
+  }
+
+  .dm-item {
+    min-height: 48px;
+  }
+
+  .control-stack {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
 }
 </style>

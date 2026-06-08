@@ -3,6 +3,7 @@ import { defineStore } from 'pinia';
 import websocketService from '../services/websocketService';
 import { useUserStore } from './userStore';
 import type { User } from '../types';
+import { formatCallTimer } from '../utils/directCallMessage';
 import { displayUserLabel } from '../utils/userDisplay';
 
 export type VoiceUser = {
@@ -36,6 +37,7 @@ type JoinChannelOptions = {
   serverId?: number | null;
   serverName?: string | null;
   directPeer?: VoiceUser | null;
+  callStartedAt?: string | null;
 };
 
 type VoiceStateMessage = {
@@ -53,6 +55,8 @@ type DirectCallSignalMessage = {
   caller: VoiceUser;
   callee: VoiceUser;
   reason?: string;
+  startedAt?: string | null;
+  durationSeconds?: number | null;
 };
 
 const displayNameOf = (user: VoiceUser | User | null | undefined) =>
@@ -121,6 +125,9 @@ export const useVoiceStore = defineStore('voice', () => {
   const userVolumes = ref<Record<number, number>>({});
   const incomingCall = ref<DirectCallSignalMessage | null>(null);
   const outgoingCall = ref<DirectCallSignalMessage | null>(null);
+  const activeDirectPeer = ref<VoiceUser | null>(null);
+  const activeCallStartedAt = ref<string | null>(null);
+  const activeCallElapsedSeconds = ref(0);
 
   const peerConnections = new Map<number, RTCPeerConnection>();
   const pendingIceCandidates = new Map<number, RTCIceCandidateInit[]>();
@@ -148,6 +155,7 @@ export const useVoiceStore = defineStore('voice', () => {
   let reconnectTimer: number | null = null;
   let reconnectAttempts = 0;
   let directCallPeer: VoiceUser | null = null;
+  let callTimer: number | null = null;
 
   const currentUser = computed(() => userStore.currentUser);
 
@@ -169,10 +177,15 @@ export const useVoiceStore = defineStore('voice', () => {
   });
 
   const participantCount = computed(() => visibleParticipants.value.length);
+  const isDirectCall = computed(() => Boolean(activeDirectPeer.value));
 
   const statusText = computed(() => {
     if (!isJoined.value) {
       return '加入后即可和同频道成员实时语音通话。';
+    }
+
+    if (activeDirectPeer.value) {
+      return `正在与 ${displayNameOf(activeDirectPeer.value)} 通话，已通话 ${formatCallTimer(activeCallElapsedSeconds.value)}。`;
     }
 
     return `正在语音通话，当前 ${participantCount.value} 人在线。`;
@@ -189,6 +202,10 @@ export const useVoiceStore = defineStore('voice', () => {
 
     if (isDeafened.value) {
       return '已拒听';
+    }
+
+    if (activeDirectPeer.value) {
+      return '私聊通话中';
     }
 
     return '你正在频道中';
@@ -322,6 +339,12 @@ export const useVoiceStore = defineStore('voice', () => {
       activeServerId.value = options.serverId ?? null;
       activeServerName.value = options.serverName || '';
       directCallPeer = options.directPeer || null;
+      activeDirectPeer.value = options.directPeer || null;
+      if (options.directPeer) {
+        startCallTimer(options.callStartedAt);
+      } else {
+        stopCallTimer();
+      }
       isJoined.value = true;
       participants.value = [toVoiceUser(currentUser.value)];
       participantsByChannel.value = {
@@ -386,6 +409,7 @@ export const useVoiceStore = defineStore('voice', () => {
     lastJoinOptions = null;
     reconnectAttempts = 0;
     directCallPeer = null;
+    activeDirectPeer.value = null;
     cleanupVoice(true);
   };
 
@@ -744,6 +768,10 @@ export const useVoiceStore = defineStore('voice', () => {
     activeServerId.value = null;
     activeServerName.value = '';
     directCallPeer = preserveReconnect ? directCallPeer : null;
+    activeDirectPeer.value = preserveReconnect ? activeDirectPeer.value : null;
+    if (!preserveReconnect) {
+      stopCallTimer();
+    }
     isJoined.value = false;
     isConnecting.value = false;
     isMuted.value = false;
@@ -791,6 +819,7 @@ export const useVoiceStore = defineStore('voice', () => {
         serverId: null,
         serverName: '私信',
         directPeer: peer,
+        callStartedAt: message.startedAt || null,
       });
       return;
     }
@@ -831,6 +860,31 @@ export const useVoiceStore = defineStore('voice', () => {
 
     websocketService.emit(`/direct-call/${call.callee.id}/cancel`, {});
     outgoingCall.value = null;
+  };
+
+  const startCallTimer = (startedAt?: string | null) => {
+    stopCallTimer();
+    const startedTime = startedAt ? new Date(startedAt).getTime() : Date.now();
+    const safeStartedTime = Number.isFinite(startedTime) ? startedTime : Date.now();
+    activeCallStartedAt.value = new Date(safeStartedTime).toISOString();
+
+    const updateTimer = () => {
+      activeCallElapsedSeconds.value = Math.max(
+        0,
+        Math.floor((Date.now() - safeStartedTime) / 1000)
+      );
+    };
+    updateTimer();
+    callTimer = window.setInterval(updateTimer, 1000);
+  };
+
+  const stopCallTimer = () => {
+    if (callTimer != null) {
+      window.clearInterval(callTimer);
+      callTimer = null;
+    }
+    activeCallStartedAt.value = null;
+    activeCallElapsedSeconds.value = 0;
   };
 
   const clearReconnectTimer = () => {
@@ -915,6 +969,10 @@ export const useVoiceStore = defineStore('voice', () => {
     userVolumes,
     incomingCall,
     outgoingCall,
+    activeDirectPeer,
+    activeCallStartedAt,
+    activeCallElapsedSeconds,
+    isDirectCall,
     visibleParticipants,
     participantCount,
     remoteStreams,
