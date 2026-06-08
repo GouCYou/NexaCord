@@ -1,5 +1,10 @@
 <template>
-  <div class="layout" :class="{ 'mobile-nav-open': mobileNavOpen }">
+  <div
+    class="layout"
+    :class="{ 'mobile-nav-open': mobileNavOpen }"
+    @touchstart.passive="handleLayoutTouchStart"
+    @touchend.passive="handleLayoutTouchEnd"
+  >
     <button
       v-if="mobileNavOpen"
       class="mobile-nav-backdrop"
@@ -8,11 +13,11 @@
       @click="closeMobileNav"
     ></button>
 
-    <aside class="servers-pane">
+    <aside class="servers-pane" :class="{ open: mobileNavOpen }" :style="mobileServersPaneStyle">
       <ServerList />
     </aside>
 
-    <aside class="channels-pane">
+    <aside class="channels-pane" :class="{ open: mobileNavOpen }" :style="mobileChannelsPaneStyle">
       <FriendsSidebar v-if="isHomeRoute" />
       <ChannelList v-else />
     </aside>
@@ -51,7 +56,11 @@
       </div>
 
       <div v-else class="channel-workspace" :class="{ 'with-members': shouldShowMemberSidebar }">
-        <router-view />
+        <router-view v-slot="{ Component, route: childRoute }">
+          <Transition name="workspace-page" mode="out-in">
+            <component :is="Component" :key="childRoute.fullPath" />
+          </Transition>
+        </router-view>
         <MemberSidebar v-if="shouldShowMemberSidebar" :server-id="currentServerId" />
       </div>
     </main>
@@ -147,8 +156,13 @@ const { incomingCall, outgoingCall, isJoined } = storeToRefs(voiceStore);
 const showMemberSidebar = ref(true);
 const showCallReplaceConfirm = ref(false);
 const mobileNavOpen = ref(false);
+const touchStartX = ref(0);
+const touchStartY = ref(0);
 const defaultAvatarUrl = '/logo.png';
 let routeSyncVersion = 0;
+
+const mobileServersPaneStyle = computed(() => (mobileNavOpen.value ? { left: '0' } : undefined));
+const mobileChannelsPaneStyle = computed(() => (mobileNavOpen.value ? { left: '72px' } : undefined));
 
 const parseRouteId = (value: unknown): number | null => {
   if (typeof value !== 'string') {
@@ -202,6 +216,35 @@ const toggleMobileNav = () => {
 
 const handleKeydown = (event: KeyboardEvent) => {
   if (event.key === 'Escape') {
+    closeMobileNav();
+  }
+};
+
+const handleLayoutTouchStart = (event: TouchEvent) => {
+  const touch = event.changedTouches[0];
+  if (!touch || window.innerWidth > 760) {
+    return;
+  }
+
+  touchStartX.value = touch.clientX;
+  touchStartY.value = touch.clientY;
+};
+
+const handleLayoutTouchEnd = (event: TouchEvent) => {
+  const touch = event.changedTouches[0];
+  if (!touch || window.innerWidth > 760) {
+    return;
+  }
+
+  const deltaX = touch.clientX - touchStartX.value;
+  const deltaY = touch.clientY - touchStartY.value;
+  if (Math.abs(deltaX) < 72 || Math.abs(deltaX) < Math.abs(deltaY) * 1.35) {
+    return;
+  }
+
+  if (deltaX > 0 && touchStartX.value < 42) {
+    openMobileNav();
+  } else if (deltaX < 0 && mobileNavOpen.value) {
     closeMobileNav();
   }
 };
@@ -391,6 +434,7 @@ watch(incomingCall, () => {
   width: 100%;
   height: 100vh;
   background: var(--discord-bg);
+  transform: none;
 }
 
 .mobile-nav-backdrop {
@@ -430,6 +474,23 @@ watch(incomingCall, () => {
 
 .channel-workspace.with-members {
   grid-template-columns: minmax(0, 1fr) 280px;
+}
+
+.workspace-page-enter-active,
+.workspace-page-leave-active {
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.workspace-page-enter-from {
+  opacity: 0;
+  transform: translateX(12px);
+}
+
+.workspace-page-leave-to {
+  opacity: 0;
+  transform: translateX(-10px);
 }
 
 .empty-state {
@@ -685,25 +746,28 @@ watch(incomingCall, () => {
     bottom: 0;
     z-index: 80;
     height: 100dvh;
-    box-shadow: 18px 0 44px rgba(0, 0, 0, 0.28);
-    transition: transform 180ms ease;
+    box-shadow: none;
+    transform: none;
+    transition: left 180ms ease;
   }
 
   .servers-pane {
-    left: 0;
+    left: -72px;
     width: 72px;
-    transform: translateX(-72px);
   }
 
   .channels-pane {
-    left: 72px;
-    width: min(292px, calc(100vw - 72px));
-    transform: translateX(calc(-100% - 72px));
+    --mobile-channels-width: min(292px, calc(100vw - 72px));
+    left: calc(var(--mobile-channels-width) * -1);
+    width: var(--mobile-channels-width);
   }
 
-  .layout.mobile-nav-open .servers-pane,
-  .layout.mobile-nav-open .channels-pane {
-    transform: translateX(0);
+  .servers-pane.open {
+    left: 0;
+  }
+
+  .channels-pane.open {
+    left: 72px;
   }
 
   .content-pane {

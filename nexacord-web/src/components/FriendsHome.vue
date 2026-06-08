@@ -1,5 +1,13 @@
 <template>
-  <section class="friends-home">
+  <section
+    class="friends-home"
+    @mousedown="handleFriendPointerStart"
+    @mouseup="handleFriendPointerEnd"
+    @pointerdown.passive="handleFriendPointerStart"
+    @pointerup.passive="handleFriendPointerEnd"
+    @touchstart.passive="handleFriendTouchStart"
+    @touchend.passive="handleFriendTouchEnd"
+  >
     <header class="friends-topbar">
       <button class="mobile-nav-button" type="button" aria-label="打开导航" @click="openMobileNav">
         <Menu :size="22" aria-hidden="true" />
@@ -194,6 +202,8 @@ const friends = ref<Friendship[]>([]);
 const incomingRequests = ref<Friendship[]>([]);
 const outgoingRequests = ref<Friendship[]>([]);
 const activeTab = ref<FriendTab>('online');
+const friendTouchStartX = ref(0);
+const friendTouchStartY = ref(0);
 const isLoading = ref(false);
 const friendQuery = ref('');
 const searchQuery = ref('');
@@ -201,6 +211,7 @@ const friendError = ref('');
 const isSubmittingFriend = ref(false);
 const addFriendForm = ref<HTMLFormElement | null>(null);
 const confirmingRemoveFriendId = ref<number | null>(null);
+let lastFriendSwipeAt = 0;
 
 const onlineFriends = computed(() =>
   friends.value.filter((friendship) => friendship.user.status && friendship.user.status !== 'offline')
@@ -324,6 +335,78 @@ const focusFriendTab = (event: Event) => {
 
 const openMobileNav = () => {
   window.dispatchEvent(new CustomEvent('nexacord:open-mobile-nav'));
+};
+
+const isSwipeIgnoredTarget = (target: EventTarget | null) =>
+  target instanceof HTMLElement && Boolean(target.closest('input, textarea, select, button, a'));
+
+const switchFriendTab = (step: -1 | 1) => {
+  const tabOrder = tabs.map((tab) => tab.value);
+  const activeIndex = tabOrder.indexOf(activeTab.value);
+  const nextIndex = (activeIndex + step + tabOrder.length) % tabOrder.length;
+  const nextTab = tabOrder[nextIndex];
+  if (nextTab) {
+    activeTab.value = nextTab;
+  }
+};
+
+const handleFriendTouchStart = (event: TouchEvent) => {
+  const touch = event.changedTouches[0];
+  if (!touch || window.innerWidth > 760 || isSwipeIgnoredTarget(event.target)) {
+    return;
+  }
+
+  friendTouchStartX.value = touch.clientX;
+  friendTouchStartY.value = touch.clientY;
+};
+
+const handleFriendTouchEnd = (event: TouchEvent) => {
+  const touch = event.changedTouches[0];
+  if (!touch || window.innerWidth > 760 || !friendTouchStartX.value) {
+    return;
+  }
+
+  finishFriendSwipe(touch.clientX, touch.clientY);
+};
+
+const handleFriendPointerStart = (event: PointerEvent | MouseEvent) => {
+  if (window.innerWidth > 760 || isSwipeIgnoredTarget(event.target)) {
+    return;
+  }
+
+  if ('button' in event && event.button !== 0) {
+    return;
+  }
+
+  friendTouchStartX.value = event.clientX;
+  friendTouchStartY.value = event.clientY;
+};
+
+const handleFriendPointerEnd = (event: PointerEvent | MouseEvent) => {
+  if (window.innerWidth > 760 || !friendTouchStartX.value) {
+    return;
+  }
+
+  finishFriendSwipe(event.clientX, event.clientY);
+};
+
+const finishFriendSwipe = (clientX: number, clientY: number) => {
+  const deltaX = clientX - friendTouchStartX.value;
+  const deltaY = clientY - friendTouchStartY.value;
+  friendTouchStartX.value = 0;
+  friendTouchStartY.value = 0;
+
+  const now = Date.now();
+  if (
+    now - lastFriendSwipeAt < 320 ||
+    Math.abs(deltaX) < 70 ||
+    Math.abs(deltaX) < Math.abs(deltaY) * 1.3
+  ) {
+    return;
+  }
+
+  lastFriendSwipeAt = now;
+  switchFriendTab(deltaX < 0 ? 1 : -1);
 };
 
 const applyUserStatusUpdate = (payload: unknown) => {
@@ -793,11 +876,13 @@ button:disabled {
   }
 
   .friends-topbar {
-    min-height: calc(54px + env(safe-area-inset-top));
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr);
+    grid-template-rows: 38px auto;
+    min-height: calc(98px + env(safe-area-inset-top));
     align-items: center;
-    flex-direction: row;
     gap: 8px;
-    padding: calc(8px + env(safe-area-inset-top)) 8px 8px;
+    padding: calc(8px + env(safe-area-inset-top)) 10px 10px;
     overflow: hidden;
   }
 
@@ -805,7 +890,6 @@ button:disabled {
     width: 38px;
     height: 38px;
     border-radius: 10px;
-    flex: 0 0 38px;
     display: grid;
     place-items: center;
     background: var(--discord-muted-surface);
@@ -814,10 +898,9 @@ button:disabled {
 
   .topbar-title {
     min-width: 0;
-    flex: 0 0 auto;
     gap: 8px;
-    padding-right: 8px;
-    border-right: 1px solid var(--discord-border);
+    padding-right: 0;
+    border-right: 0;
   }
 
   .topbar-title h1 {
@@ -825,23 +908,34 @@ button:disabled {
   }
 
   .friend-tabs {
+    grid-column: 1 / -1;
     min-width: 0;
-    flex: 1;
-    flex-wrap: nowrap;
-    gap: 6px;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .friend-tabs::-webkit-scrollbar {
-    display: none;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+    padding: 4px;
+    border-radius: 14px;
+    overflow: hidden;
+    background: var(--discord-surface-soft);
   }
 
   .friend-tabs button {
-    flex: 0 0 auto;
+    min-width: 0;
     min-height: 34px;
-    padding: 0 10px;
+    padding: 0 6px;
+    border-radius: 10px;
+    font-size: 13px;
     white-space: nowrap;
+  }
+
+  .friend-tabs button.add {
+    background: transparent;
+    color: var(--discord-green);
+  }
+
+  .friend-tabs button.add.active {
+    background: var(--discord-green);
+    color: white;
   }
 
   .friends-content {

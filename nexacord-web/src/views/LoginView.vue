@@ -258,7 +258,7 @@ const handleResetPassword = async () => {
   border-radius: 24px;
   overflow: hidden;
   background: color-mix(in srgb, var(--discord-elevated) 82%, transparent);
-  box-shadow: var(--discord-shadow);
+  box-shadow: none;
   backdrop-filter: blur(18px);
 }
 
@@ -469,7 +469,7 @@ const handleResetPassword = async () => {
   border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: 28px;
   background: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.16);
+  box-shadow: none;
 }
 
 .brand-panel {
@@ -617,7 +617,7 @@ const handleResetPassword = async () => {
 .primary-button {
   border-radius: 14px;
   background: #2563eb;
-  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.22);
+  box-shadow: none;
 }
 
 .primary-button:hover:not(:disabled) {
@@ -631,19 +631,101 @@ const handleResetPassword = async () => {
 }
 
 @media (max-width: 860px) {
+  .auth-shell {
+    height: 100dvh;
+    min-height: 100dvh;
+    place-items: center;
+    padding: max(8px, env(safe-area-inset-top)) 10px max(8px, env(safe-area-inset-bottom));
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
   .auth-card {
-    grid-template-columns: 1fr;
-    height: auto;
+    width: min(430px, 100%);
     max-height: none;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+    height: auto;
+    overflow: hidden;
+    border-radius: 20px;
   }
 
   .brand-panel {
-    min-height: 220px;
-    padding-bottom: 24px;
+    min-height: 0;
+    align-content: center;
+    gap: 6px;
+    padding: 14px 18px;
+  }
+
+  .brand-mark {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+  }
+
+  .brand-kicker,
+  .brand-preview,
+  .brand-panel p {
+    display: none;
+  }
+
+  .brand-panel h1 {
+    font-size: 24px;
+    line-height: 1.08;
+  }
+
+  .form-panel {
+    gap: 12px;
+    padding: 18px;
+    overflow: visible;
+  }
+
+  .form-header h2 {
+    font-size: 24px;
+  }
+
+  .form-header p {
+    margin-top: 3px;
+    font-size: 13px;
+  }
+
+  .form-body {
+    gap: 10px;
+  }
+
+  .field {
+    gap: 5px;
+  }
+
+  .field input,
+  .primary-button,
+  .secondary-button {
+    min-height: 42px;
+    padding-block: 8px;
+  }
+
+  .code-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .secondary-button {
+    width: 100%;
+  }
+
+  .error-message,
+  .notice-message {
+    padding: 9px 10px;
+    font-size: 13px;
+  }
+
+  .form-footer {
+    justify-content: center;
   }
 }
 
-@media (max-height: 760px) {
+@media (max-height: 760px) and (min-width: 861px) {
   .auth-card {
     height: calc(100dvh - 18px);
   }

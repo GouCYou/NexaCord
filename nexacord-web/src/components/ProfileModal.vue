@@ -538,9 +538,10 @@ watch(currentUser, syncProfileForm);
   display: grid;
   grid-template-rows: auto 1fr;
   overflow: hidden;
+  border: 1px solid var(--discord-border);
   border-radius: 8px;
   background: var(--discord-bg);
-  box-shadow: var(--discord-shadow);
+  box-shadow: none;
 }
 
 .modal-heading {
@@ -603,20 +604,31 @@ watch(currentUser, syncProfileForm);
   position: relative;
   width: 84px;
   height: 84px;
+  min-width: 84px;
+  min-height: 84px;
+  max-width: 84px;
+  max-height: 84px;
+  aspect-ratio: 1;
+  flex: 0 0 84px;
   border: 6px solid var(--discord-surface-soft);
   border-radius: 50%;
+  padding: 0;
   display: grid;
   place-items: center;
   background: var(--discord-brand);
   color: white;
   font-size: 26px;
   font-weight: 900;
+  line-height: 0;
   overflow: hidden;
 }
 
+.avatar-upload :deep(.avatar-image-frame),
+.avatar-upload :deep(.avatar-image-canvas),
 .avatar-upload img {
   width: 100%;
   height: 100%;
+  border-radius: 50%;
   object-fit: cover;
 }
 
@@ -838,7 +850,7 @@ watch(currentUser, syncProfileForm);
     linear-gradient(180deg, color-mix(in srgb, var(--discord-brand) 18%, transparent), transparent 230px),
     var(--discord-elevated);
   color: var(--discord-text);
-  box-shadow: var(--discord-shadow);
+  box-shadow: none;
   animation: modal-pop 150ms ease-out;
 }
 
@@ -953,11 +965,31 @@ button:disabled {
 
 @media (max-width: 760px) {
   .profile-body {
+    grid-template-rows: auto minmax(0, 1fr);
     grid-template-columns: 1fr;
   }
 
   .profile-modal {
     width: min(100%, calc(100vw - 28px));
+    max-height: calc(100dvh - 28px);
+  }
+
+  .profile-preview {
+    gap: 8px;
+    padding: 92px 16px 14px;
+  }
+
+  .profile-banner {
+    height: 104px;
+  }
+
+  .avatar-upload {
+    width: 72px;
+    height: 72px;
+    min-width: 72px;
+    min-height: 72px;
+    max-width: 72px;
+    max-height: 72px;
   }
 
   .email-display-row {

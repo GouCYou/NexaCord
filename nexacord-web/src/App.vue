@@ -1,5 +1,9 @@
 <template>
-  <router-view />
+  <router-view v-slot="{ Component, route }">
+    <Transition name="route-page" mode="out-in">
+      <component :is="Component" :key="route.matched[0]?.path || route.fullPath" />
+    </Transition>
+  </router-view>
   <Teleport to="body">
     <div v-if="sessionReplacementNotice" class="session-replaced-overlay" role="dialog" aria-modal="true">
       <section class="session-replaced-dialog">
